@@ -1,8 +1,8 @@
 import os
 import shutil
 
-from one_dragon.config.yaml_operator import YamlOperator
-from one_dragon.utils import os_utils
+from script_chainer.config.yaml_operator import YamlOperator
+from script_chainer.utils import os_utils
 
 
 class YamlConfig(YamlOperator):

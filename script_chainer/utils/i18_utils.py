@@ -2,7 +2,7 @@ import gettext
 import os
 from typing import Optional
 
-from one_dragon.utils import os_utils
+from script_chainer.utils import os_utils
 
 _gt = {}
 _default_lang = 'cn'

@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Optional, Iterable, Any
 
-from one_dragon.utils.i18_utils import gt
+from script_chainer.utils.i18_utils import gt
 
 
 class ConfigItem:

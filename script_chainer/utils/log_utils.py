@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
-from one_dragon.utils import os_utils
+from script_chainer.utils import os_utils
 
 LOGGER_NAME = 'OneDragon'
 _HANDLER_OWNER_ATTR = '_one_dragon_logger_owner'

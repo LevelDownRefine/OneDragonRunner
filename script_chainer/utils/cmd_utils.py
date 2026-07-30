@@ -3,8 +3,8 @@ import subprocess
 from typing import List, Optional, Callable
 import threading
 
-from one_dragon.utils import os_utils
-from one_dragon.utils.log_utils import log
+from script_chainer.utils import os_utils
+from script_chainer.utils.log_utils import log
 
 
 def run_command(commands: List[str], cwd: Optional[str] = None,

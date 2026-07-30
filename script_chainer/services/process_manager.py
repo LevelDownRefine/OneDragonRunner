@@ -49,7 +49,7 @@ from pathlib import Path
 
 import psutil
 
-from one_dragon.utils.encoding_utils import decode_bytes, get_console_encoding
+from script_chainer.utils.encoding_utils import decode_bytes, get_console_encoding
 from script_chainer.utils.process_name_utils import (
     normalize_process_names,
     process_name_equals,

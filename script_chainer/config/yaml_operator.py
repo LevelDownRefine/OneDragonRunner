@@ -4,8 +4,8 @@ import shutil
 
 import yaml
 
-from one_dragon.utils import yaml_utils
-from one_dragon.utils.log_utils import log
+from script_chainer.utils import yaml_utils
+from script_chainer.utils.log_utils import log
 
 cached_yaml_data: dict[str, tuple[float, dict | list]] = {}
 

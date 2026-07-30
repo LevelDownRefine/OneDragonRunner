@@ -63,7 +63,7 @@ def get_work_dir() -> str:
 
     从本文件位置向上查找含 pyproject.toml 且存在 src/ 子目录的目录作为项目根。
     原 one_dragon 实现按固定上溯层数（4 层）计算根目录，依赖 one_dragon 包位于
-    <根>/src/one_dragon 之下；本仓库将其 vendored 到 <根>/src/runner/one_dragon，
+    <根>/src/one_dragon 之下；本仓库将其 vendored 并并入 <根>/src/runner/script_chainer/utils，
     层数不再固定，故改为基于项目根标记做稳健查找。
     :return: 项目根目录
     """

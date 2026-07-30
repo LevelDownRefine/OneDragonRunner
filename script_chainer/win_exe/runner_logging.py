@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 
-from one_dragon.utils.log_utils import (
+from script_chainer.utils.log_utils import (
     ProjectRuntimeLoggingContext,
     configure_project_runtime_logging,
     get_log_file_path,

@@ -17,7 +17,7 @@ from typing import TextIO
 
 from colorama import Fore, Style, init
 
-from one_dragon.utils import cmd_utils
+from script_chainer.utils import cmd_utils
 from script_chainer.config.script_config import (
     CheckDoneMethods,
     ScriptChainConfig,
