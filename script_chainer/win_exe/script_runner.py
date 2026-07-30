@@ -141,7 +141,7 @@ _exit_controller = _RunnerExitController()
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--chain', type=str, default='01', help='脚本链名称')
+    parser.add_argument('--chain', type=str, default='config/script_chain/88.yml', help='脚本链配置文件路径（.yml）')
     parser.add_argument('-s', '--shutdown', type=int, nargs='?', const=60, help='运行后关机延迟秒数，默认60秒')
     parser.add_argument('--debug-index', type=int, default=None, help='仅调试指定下标脚本，并按挂靠关系一并编排（禁用项仍会跳过）')
 
@@ -160,7 +160,7 @@ def print_message(message: str, level="INFO"):
 
 def _push_chain_notification(
     ctx: ScriptChainerContext | None,
-    chain_name: str,
+    chain_label: str,
     action: str,
     script_config: ScriptConfig,
 ) -> None:
@@ -169,7 +169,7 @@ def _push_chain_notification(
         return
     ctx.push_service.push_async(
         title=ctx.notify_config.title,
-        content=f'脚本链 {chain_name} {action}: {script_config.script_display_name}',
+        content=f'脚本链 {chain_label} {action}: {script_config.script_display_name}',
     )
 
 
@@ -542,7 +542,7 @@ def _run_external_script_with_retries(
     script_config: ScriptConfig,
     log_notifier: LogNotifier | None = None,
     ctx: ScriptChainerContext | None = None,
-    chain_name: str = '',
+    chain_label: str = '',
 ) -> None:
     """运行外部脚本，并在静默超时时按配置重试。"""
     max_retries = (
@@ -562,7 +562,7 @@ def _run_external_script_with_retries(
             if script_config.notify_start:
                 _push_chain_notification(
                     ctx,
-                    chain_name,
+                    chain_label,
                     f'无日志超时重试 ({retry_count}/{max_retries})',
                     script_config,
                 )
@@ -584,14 +584,14 @@ def _run_script_in_group(
     script_config: ScriptConfig,
     log_notifier: LogNotifier | None = None,
     ctx: ScriptChainerContext | None = None,
-    chain_name: str = '',
+    chain_label: str = '',
 ) -> None:
     """运行运行组中的单个脚本。"""
     try:
         if script_config.script_type == ScriptType.PYTHON:
             _run_python_script(script_config, log_notifier)
         else:
-            _run_external_script_with_retries(script_config, log_notifier, ctx, chain_name)
+            _run_external_script_with_retries(script_config, log_notifier, ctx, chain_label)
     except Exception:
         log.error('脚本执行异常', exc_info=True)
 
@@ -687,11 +687,11 @@ def _cleanup_active_pm():
         _active_pm = None
 
 
-def run_chain(chain_name: str = '01', shutdown_delay: int = 0, debug_index: int | None = None) -> None:
+def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_delay: int = 0, debug_index: int | None = None) -> None:
     """运行指定的脚本链。
 
     Args:
-        chain_name: 脚本链名称。
+        chain_config_path: 脚本链配置文件路径（.yml）。
         shutdown_delay: 运行后关机延迟秒数，0 表示不关机。
         debug_index: 调试脚本下标，None 表示运行整个脚本链，非负整数表示仅调试该下标脚本，
             并按编排/挂靠关系一并纳入与其关联的脚本。
@@ -704,7 +704,8 @@ def run_chain(chain_name: str = '01', shutdown_delay: int = 0, debug_index: int 
     atexit.register(_cleanup_active_pm)
 
     init(autoreset=True)
-    chain_config: ScriptChainConfig = ScriptChainConfig(chain_name)
+    chain_config: ScriptChainConfig = ScriptChainConfig(file_path=chain_config_path)
+    chain_label = Path(chain_config_path).stem
 
     # 创建上下文实例
     # 本仓库已 vendored 掉通知/推送相关模块（ScriptChainerContext / LogNotifier /
@@ -714,7 +715,7 @@ def run_chain(chain_name: str = '01', shutdown_delay: int = 0, debug_index: int 
 
     try:
         if not chain_config.is_file_exists:
-            print_message(f'脚本链配置不存在 {chain_name}', "ERROR")
+            print_message(f'脚本链配置不存在 {chain_config_path}', "ERROR")
         else:
             attach_targets = chain_config.compute_attach_targets()
             try:
@@ -728,7 +729,7 @@ def run_chain(chain_name: str = '01', shutdown_delay: int = 0, debug_index: int 
                 return
 
             if selection.debug_target is not None:
-                print_message(f'调试运行脚本链 {chain_name}: {selection.debug_target.script_display_name}')
+                print_message(f'调试运行脚本链 {chain_label}: {selection.debug_target.script_display_name}')
 
             runtime_groups, skipped_messages = resolve_runtime_groups(selection)
 
@@ -750,18 +751,18 @@ def run_chain(chain_name: str = '01', shutdown_delay: int = 0, debug_index: int 
                     if ctx is not None and group.host.notify_start:
                         _push_chain_notification(
                             ctx,
-                            chain_name,
+                            chain_label,
                             '调试开始' if debug_index is not None else '开始运行',
                             group.host,
                         )
 
                     for script_config in group.scripts:
-                        _run_script_in_group(script_config, log_notifier, ctx, chain_name)
+                        _run_script_in_group(script_config, log_notifier, ctx, chain_label)
 
                     if ctx is not None and group.host.notify_done:
                         _push_chain_notification(
                             ctx,
-                            chain_name,
+                            chain_label,
                             '调试结束' if debug_index is not None else '运行结束',
                             group.host,
                         )
@@ -795,7 +796,7 @@ def run():
     """独立运行入口"""
     args = parse_args()
     run_chain(
-        chain_name=args.chain,
+        chain_config_path=args.chain,
         shutdown_delay=args.shutdown if args.shutdown else 0,
         debug_index=args.debug_index,
     )

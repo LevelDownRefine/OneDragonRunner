@@ -2,7 +2,7 @@
 
 用法::
 
-    python -m src.runner --chain 88 --debug-index 0
+    python -m src.runner --chain config/script_chain/88.yml --debug-index 0
 
 参数与原 ``script_chainer.win_exe.launcher`` 的 onedragon 模式对齐，
 但省去了 GUI 编辑器与 ``ExeLauncher`` 依赖，直接调用
@@ -21,8 +21,8 @@ def main() -> None:
     parser.add_argument(
         "--chain",
         type=str,
-        default="88",
-        help="脚本链名称（对应 config/script_chain/<name>.yml）",
+        default="config/script_chain/88.yml",
+        help="脚本链配置文件路径（.yml），相对路径以项目根为基准",
     )
     parser.add_argument(
         "-s",
@@ -41,7 +41,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     run_chain(
-        chain_name=args.chain,
+        chain_config_path=args.chain,
         shutdown_delay=args.shutdown or 0,
         debug_index=args.debug_index,
     )

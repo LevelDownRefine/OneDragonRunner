@@ -5,6 +5,7 @@ from pathlib import Path, PureWindowsPath
 
 from script_chainer.config.config_item import ConfigItem, get_config_item_from_enum
 from script_chainer.config.yaml_config import YamlConfig
+from script_chainer.config.yaml_operator import YamlOperator
 from script_chainer.utils.process_name_utils import (
     normalize_process_name,
     normalize_process_names,
@@ -291,13 +292,18 @@ class ScriptChainConfig(YamlConfig):
             if k in cls._script_config_fields
         })
 
-    def __init__(self, module_name: str, is_mock: bool = False):
-        YamlConfig.__init__(
-            self,
-            module_name,
-            sub_dir=['script_chain'],
-            is_mock=is_mock, sample=False, copy_from_sample=False,
-        )
+    def __init__(self, module_name: str = '', file_path: str | None = None, is_mock: bool = False):
+        if file_path is not None:
+            # 直接以配置文件路径构造：绕过 module_name + sub_dir 的路径推导。
+            YamlOperator.__init__(self, file_path)
+            self.module_name = Path(file_path).stem
+        else:
+            YamlConfig.__init__(
+                self,
+                module_name,
+                sub_dir=['script_chain'],
+                is_mock=is_mock, sample=False, copy_from_sample=False,
+            )
 
         raw_script_list = self.get('script_list', [])
         migrated_script_list, migrated = _migrate_legacy_script_list(raw_script_list)

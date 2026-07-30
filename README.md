@@ -16,8 +16,10 @@ vendored（fork）自上游 `OneDragon-ScriptChainer` 的运行逻辑，仅保�
 由 OneDragon-Helper 的 GUI 通过子进程调用（进程隔离）：
 
 ```bash
-python -m src.runner --chain <name> --debug-index <i>
+python -m src.runner --chain <config_path> --debug-index <i>
 ```
+
+`<config_path>` 为脚本链配置文件的路径（`.yml`），相对路径以项目根为基准（例如 `config/script_chain/88.yml`）。
 
 独立使用时，将 `src/runner` 加入 `PYTHONPATH` 后同样以 `python -m src.runner` 启动；依赖 `pyyaml` / `colorama` / `psutil`（与主项目共用同一个 venv）。
 
