@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional, Iterable, Any
+from typing import Any, Iterable, Optional
 
 from script_chainer.utils.i18_utils import gt
 

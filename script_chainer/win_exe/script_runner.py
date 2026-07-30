@@ -13,11 +13,16 @@ from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePath
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
 from colorama import Fore, Style, init
 
 from script_chainer.utils import cmd_utils
+
+if TYPE_CHECKING:
+    # 通知/上下文在移植时被有意移除（运行器不再推送），仅保留类型以供静态检查。
+    from script_chainer.context import ScriptChainerContext
+    from script_chainer.log_notifier import LogNotifier
 from script_chainer.config.script_config import (
     CheckDoneMethods,
     ScriptChainConfig,

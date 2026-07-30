@@ -2,7 +2,7 @@
 
 用法::
 
-    python -m src.runner --chain config/script_chain/88.yml --debug-index 0
+    python -m src.runner.launcher --chain config/script_chain/88.yml --debug-index 0
 
 参数与原 ``script_chainer.win_exe.launcher`` 的 onedragon 模式对齐，
 但省去了 GUI 编辑器与 ``ExeLauncher`` 依赖，直接调用

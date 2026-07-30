@@ -12,7 +12,7 @@
 ``get_work_dir()`` 已重写为定位项目根目录（含 pyproject.toml 且含 src/ 的目录），
 因此脚本链配置解析到 ``<项目根>/config/script_chain/``。
 
-入口：``python -m src.runner --chain <config_path> --debug-index <i>``
+入口：``python -m src.runner.launcher --chain <config_path> --debug-index <i>``
 
 其中 ``<config_path>`` 为脚本链配置文件路径（.yml），相对路径以项目根为基准
 （例如 ``config/script_chain/88.yml``）。

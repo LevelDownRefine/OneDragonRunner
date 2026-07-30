@@ -1,5 +1,6 @@
+from typing import IO, Any
+
 import yaml
-from typing import Any, IO
 
 try:
     from yaml import CSafeLoader as SafeLoader
