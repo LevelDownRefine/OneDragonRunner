@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from one_dragon.base.config.yaml_operator import YamlOperator
+from one_dragon.config.yaml_operator import YamlOperator
 from one_dragon.utils import os_utils
 
 

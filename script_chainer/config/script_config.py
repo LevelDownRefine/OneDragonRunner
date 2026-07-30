@@ -3,8 +3,8 @@ from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
 from pathlib import Path, PureWindowsPath
 
-from one_dragon.base.config.config_item import ConfigItem, get_config_item_from_enum
-from one_dragon.base.config.yaml_config import YamlConfig
+from one_dragon.config.config_item import ConfigItem, get_config_item_from_enum
+from one_dragon.config.yaml_config import YamlConfig
 from script_chainer.utils.process_name_utils import (
     normalize_process_name,
     normalize_process_names,
