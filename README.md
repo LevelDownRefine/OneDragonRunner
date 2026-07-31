@@ -7,10 +7,13 @@
 由 OneDragon-Helper 的 GUI 通过子进程调用：
 
 ```bash
-python -m src.runner.launcher --chain <config_path> --debug-index <i>
+python -m src.runner.launcher --chain <config_path> [--debug-index <i>]
 ```
 
 - `--chain <config_path>`：脚本链配置文件路径（`.yml`，相对路径以项目根为基准，例如 `config/script_chain/88.yml`）。
-- `--debug-index <i>`：仅运行第 `i` 条脚本（及其挂靠组）。
+- `--debug-index <i>`：可选，仅运行第 `i` 条脚本（及其挂靠组）；省略则运行整条链。
+
+整条链运行时，每条脚本按配置中的 `block` 字段决定行为：`block: true`（默认）阻塞等待其完成；
+`block: false` 后台启动并继续下一条，整链末尾统一等待所有后台脚本完成后再退出。
 
 依赖 `pyyaml` / `colorama` / `psutil`。

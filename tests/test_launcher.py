@@ -76,6 +76,48 @@ class TestLauncherRunsThrough(unittest.TestCase):
             run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
         # 禁用脚本在编排解析阶段被跳过，不会真正启动任何进程
 
+    def test_non_blocking_scripts_run_and_waited(self):
+        """整链模式下 block=False 的脚本后台启动，run_chain 末尾等待其完成。"""
+        marker_block = Path(self.tmp) / "block.txt"
+        marker_bg = Path(self.tmp) / "bg.txt"
+        block_py = Path(self.tmp) / "block_script.py"
+        block_py.write_text(
+            "import time\ntime.sleep(0.2)\n"
+            f"open({str(marker_block)!r}, 'w').close()\n",
+            encoding="utf-8",
+        )
+        bg_py = Path(self.tmp) / "bg_script.py"
+        bg_py.write_text(
+            "import time\ntime.sleep(0.3)\n"
+            f"open({str(marker_bg)!r}, 'w').close()\n",
+            encoding="utf-8",
+        )
+        cfg = _write_chain(self.tmp, {"script_list": [
+            {
+                "display_name": "bg",
+                "script_type": "python",
+                "script_path": str(bg_py),
+                "block": False,
+                "run_timeout_seconds": 30,
+                "kill_script_after_done": False,
+                "kill_game_after_done": False,
+            },
+            {
+                "display_name": "block",
+                "script_type": "python",
+                "script_path": str(block_py),
+                "block": True,
+                "run_timeout_seconds": 30,
+                "kill_script_after_done": False,
+                "kill_game_after_done": False,
+            },
+        ]})
+        with mock.patch.object(script_runner._exit_controller, "wait", return_value=False):
+            run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
+        # 非阻塞脚本在整链末尾被等待完成，故二者标记文件均应存在
+        self.assertTrue(marker_bg.exists(), "非阻塞后台脚本应已运行")
+        self.assertTrue(marker_block.exists(), "阻塞脚本应已运行")
+
 
 if __name__ == "__main__":
     unittest.main()

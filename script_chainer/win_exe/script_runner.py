@@ -54,6 +54,8 @@ from script_chainer.win_exe.runner_logging import (
 
 # 当前活跃的 ProcessManager，用于信号处理时清理
 _active_pm: ProcessManager | None = None
+# 所有非阻塞后台脚本的 ProcessManager，供退出时统一清理
+_background_pms: list[ProcessManager] = []
 
 
 class _NoLogTimeoutError(Exception):
@@ -658,7 +660,7 @@ def _run_python_script(
         # 只有当前进程内 exec 用户 Python 脚本时，控制台关闭才需要额外强退兜底。
         # Ctrl+C / Ctrl+Break 仍走 install_handlers() 注册的普通 signal 软退出链。
         with force_exit_on_console_close(
-            lambda: _exit_controller.exit(_cleanup_active_pm, force=True)
+            lambda: _exit_controller.exit(_cleanup_all_pms, force=True)
         ):
             exec(compile(code, script_path, 'exec'), exec_globals)
             if _exit_controller.is_shutdown_requested():
@@ -683,13 +685,82 @@ def _run_python_script(
             os.chdir(old_cwd)
 
 
-def _cleanup_active_pm():
-    """清理当前活跃的 ProcessManager 子进程。"""
-    global _active_pm
-    if _active_pm is not None:
-        with suppress(Exception):
-            _active_pm.kill()
-        _active_pm = None
+def _cleanup_all_pms():
+    """清理当前活跃进程与所有非阻塞后台进程。
+
+    用于信号处理、控制台关闭与 atexit：确保退出时不会遗留游离的后台脚本。
+    """
+    global _active_pm, _background_pms
+    for pm in (_active_pm, *_background_pms):
+        if pm is not None:
+            with suppress(Exception):
+                pm.kill()
+    _active_pm = None
+    _background_pms = []
+
+
+def _launch_non_blocking(
+    script_config: ScriptConfig,
+    log_notifier: LogNotifier | None,
+    background: list,
+) -> None:
+    """后台启动非阻塞脚本：启动后立即返回，交由 run_chain 末尾统一等待与清理。
+
+    外部脚本与 Python 脚本均通过 ProcessManager 以独立子进程启动（Python 脚本以
+    ``sys.executable <path>`` 方式启动，隔离 cwd/argv）。不追踪目标进程，避免
+    launcher 模式下的同步阻塞搜索；后台进程的存活仅以直接启动的进程为准。
+    """
+    invalid = script_config.invalid_message
+    if invalid is not None:
+        print_message(f'脚本配置不合法 跳过运行(非阻塞) {invalid}')
+        return
+
+    program: str
+    args: list[str] = []
+    if script_config.script_arguments and script_config.script_arguments.strip():
+        args = shlex.split(script_config.script_arguments, posix=False)
+    if script_config.script_type == ScriptType.PYTHON:
+        program = sys.executable
+        args = [script_config.script_path, *args]
+    else:
+        program = script_config.script_path
+
+    pm = ProcessManager()
+    try:
+        ok = pm.open_process(
+            program=program,
+            args=args,
+            target_process=None,
+            stdout_callback=_make_stdout_callback(script_config.script_display_name, log_notifier),
+        )
+    except Exception:
+        log.error('启动非阻塞脚本失败', exc_info=True)
+        print_message(f'非阻塞脚本启动失败 {script_config.script_display_name}', level='ERROR')
+        return
+    if not ok:
+        print_message(f'非阻塞脚本启动失败 {script_config.script_display_name}', level='ERROR')
+        pm.kill()
+        return
+    print_message(f'非阻塞启动脚本 {script_config.script_display_name}', level='PASS')
+    background.append((script_config, pm))
+    _background_pms.append(pm)
+
+
+def _wait_for_process_exit(pm: ProcessManager, timeout: float) -> None:
+    """轮询等待 ProcessManager 管理的进程退出，尊重关闭信号。"""
+    start = time.time()
+    while pm.is_running():
+        if _exit_controller.wait(1):
+            return
+        if time.time() - start > max(timeout, 0):
+            break
+
+
+def _wait_background_scripts(background: list) -> None:
+    """等待所有非阻塞后台脚本完成（受各自 run_timeout_seconds 约束），随后清理。"""
+    for script_config, pm in background:
+        _wait_for_process_exit(pm, script_config.run_timeout_seconds)
+        _cleanup_processes(script_config, pm)
 
 
 def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_delay: int = 0, debug_index: int | None = None) -> None:
@@ -705,8 +776,8 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
     configure_runner_runtime_logging()
 
     # 注册普通信号处理，控制台关闭强退仅在 Python exec 窗口内临时启用
-    _exit_controller.install_handlers(_cleanup_active_pm)
-    atexit.register(_cleanup_active_pm)
+    _exit_controller.install_handlers(_cleanup_all_pms)
+    atexit.register(_cleanup_all_pms)
 
     init(autoreset=True)
     chain_config: ScriptChainConfig = ScriptChainConfig(file_path=chain_config_path)
@@ -741,6 +812,8 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
             for message in skipped_messages:
                 print_message(message)
 
+            background: list[tuple[ScriptConfig, ProcessManager]] = []
+
             for group_idx, group in enumerate(runtime_groups):
                 log_notifier: LogNotifier | None = None
                 if ctx is not None and group.host.notify_log_interval > 0:
@@ -762,7 +835,10 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
                         )
 
                     for script_config in group.scripts:
-                        _run_script_in_group(script_config, log_notifier, ctx, chain_label)
+                        if script_config.block:
+                            _run_script_in_group(script_config, log_notifier, ctx, chain_label)
+                        else:
+                            _launch_non_blocking(script_config, log_notifier, background)
 
                     if ctx is not None and group.host.notify_done:
                         _push_chain_notification(
@@ -781,6 +857,10 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
                         break
 
             print_message('已完成调试脚本' if debug_index is not None else '已完成全部脚本')
+
+            if background:
+                print_message(f'等待 {len(background)} 个非阻塞后台脚本完成')
+                _wait_background_scripts(background)
 
         if shutdown_delay > 0:
             cmd_utils.shutdown_sys(shutdown_delay)
