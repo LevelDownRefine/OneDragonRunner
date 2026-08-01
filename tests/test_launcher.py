@@ -28,6 +28,18 @@ def _write_chain(tmp_dir: str, data: dict, name: str = "smoke") -> str:
     return str(p)
 
 
+def _write_external_script(tmp_dir: Path, name: str, py_file: Path) -> str:
+    """生成一个调用当前解释器执行 py_file 的外部脚本（Windows: .bat / 其他: .sh）。"""
+    if sys.platform == "win32":
+        p = tmp_dir / f"{name}.bat"
+        p.write_text(f'@echo off\r\n"{sys.executable}" "{py_file}"\r\n', encoding="utf-8")
+    else:
+        p = tmp_dir / f"{name}.sh"
+        p.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{py_file}"\n', encoding="utf-8")
+        p.chmod(0o755)
+    return str(p)
+
+
 class TestLauncherArgParsing(unittest.TestCase):
     """launcher.main 解析命令行参数并正确调用 run_chain。"""
 
@@ -77,7 +89,7 @@ class TestLauncherRunsThrough(unittest.TestCase):
         # 禁用脚本在编排解析阶段被跳过，不会真正启动任何进程
 
     def test_non_blocking_scripts_run_and_waited(self):
-        """整链模式下 block=False 的脚本后台启动，run_chain 末尾等待其完成。"""
+        """整链模式下 block=False 的外部脚本后台启动，run_chain 末尾等待其完成。"""
         marker_block = Path(self.tmp) / "block.txt"
         marker_bg = Path(self.tmp) / "bg.txt"
         block_py = Path(self.tmp) / "block_script.py"
@@ -92,11 +104,13 @@ class TestLauncherRunsThrough(unittest.TestCase):
             f"open({str(marker_bg)!r}, 'w').close()\n",
             encoding="utf-8",
         )
+        # 非阻塞仅支持外部脚本，故用平台脚本包一层调用当前解释器
+        bg_external = _write_external_script(Path(self.tmp), "bg_script", bg_py)
         cfg = _write_chain(self.tmp, {"script_list": [
             {
                 "display_name": "bg",
-                "script_type": "python",
-                "script_path": str(bg_py),
+                "script_path": bg_external,
+                "check_done": "script_closed",
                 "block": False,
                 "run_timeout_seconds": 30,
                 "kill_script_after_done": False,

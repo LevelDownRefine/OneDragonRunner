@@ -15,5 +15,6 @@ python -m src.runner.launcher --chain <config_path> [--debug-index <i>]
 
 整条链运行时，每条脚本按配置中的 `block` 字段决定行为：`block: true`（默认）阻塞等待其完成；
 `block: false` 后台启动并继续下一条，整链末尾统一等待所有后台脚本完成后再退出。
+非阻塞仅对外部脚本生效：`script_type: python` 在当前进程内 exec，无法后台化，始终阻塞运行。
 
 依赖 `pyyaml` / `colorama` / `psutil`。

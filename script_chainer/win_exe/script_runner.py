@@ -55,7 +55,7 @@ from script_chainer.win_exe.runner_logging import (
 # 当前活跃的 ProcessManager，用于信号处理时清理
 _active_pm: ProcessManager | None = None
 # 所有非阻塞后台脚本的 ProcessManager，供退出时统一清理
-_background_pms: list[ProcessManager] = []
+_non_block_pms: list[ProcessManager] = []
 
 
 class _NoLogTimeoutError(Exception):
@@ -324,28 +324,124 @@ def _wait_for_subprocess_ready(
     return False
 
 
-def _monitor_script_done(
-    script_config: ScriptConfig,
-    state: _RunMonitorState,
-    pm: ProcessManager,
-) -> None:
-    """监控脚本运行状态，等待完成条件满足。
+class _ScriptRun:
+    """一次脚本运行的句柄，封装「启动 → 等待就绪 → 等待完成 → 清理」的完整生命周期。
 
-    Args:
-        script_config: 脚本配置。
-        state: 运行监控状态（跨 _wait_for_subprocess_ready 持久化的进程存在标志）。
-        pm: 当前脚本对应的进程管理器。
+    阻塞脚本直接调用 ``run_once`` 即可原地走完；非阻塞脚本由 ``_NonBlockScriptRun``
+    继承并重写 ``run_once``，仅启动并登记，等待与清理延后到整链末尾统一处理。
     """
-    start_time = time.time()
-    last_status: str = ''
-    game_hint_printed = False
-    script_hint_printed = False
 
-    no_log_timeout = script_config.no_log_timeout_seconds
+    def __init__(
+        self,
+        script_config: ScriptConfig,
+        log_notifier: LogNotifier | None = None,
+        state: _RunMonitorState | None = None,
+    ) -> None:
+        self._script_config = script_config
+        self._log_notifier = log_notifier
+        self._state = state or _RunMonitorState()
+        self._pm: ProcessManager | None = None
+        self._target_process_infos: list[ProcessInfo] | None = None
+        self._non_block = False
+        self._last_status: str = ''
+        self._game_hint_printed = False
+        self._script_hint_printed = False
 
-    while True:
-        is_done: bool = False
-        status: str = ''
+    def _validate(self) -> bool:
+        """校验配置合法性；不合法时打印提示并返回 False。"""
+        invalid_message = self._script_config.invalid_message
+        if invalid_message is not None:
+            print_message(f'脚本配置不合法 跳过运行 {invalid_message}')
+            return False
+        return True
+
+    def _launch(self) -> ProcessManager:
+        """启动子进程；阻塞时追踪 launcher 目标进程，非阻塞由子类重写为不追踪。"""
+        script_config = self._script_config
+        target_process_infos = None
+        if script_config.launcher_mode:
+            target_process_infos = _get_target_process_infos(
+                script_config.script_path,
+                script_config.script_process_name,
+            ) or None
+        self._target_process_infos = target_process_infos
+        return _launch_script(script_config, target_process_infos, self._log_notifier, self._state)
+
+    def _prepare(self) -> bool:
+        """校验配置并启动子进程；self._pm 就绪（process 非空）时返回 True。"""
+        if not self._validate():
+            return False
+        self._pm = self._launch()
+        return self._pm.process is not None
+
+    def run_once(self) -> None:
+        """阻塞的一次完整生命周期：校验 → 启动 → 等待就绪 → 等待完成 → 清理。"""
+        global _active_pm
+
+        if not self._prepare():
+            return
+
+        script_config = self._script_config
+        script_path = script_config.script_path
+        _active_pm = self._pm
+        try:
+            if not _wait_for_subprocess_ready(
+                self._pm,
+                script_path,
+                self._state,
+                expect_target=bool(self._target_process_infos),
+                missing_process_hint=_format_process_hint('启动后实际运行的程序', script_config.script_process_name),
+            ):
+                print_message(f'子进程创建失败 {script_path}', level='ERROR')
+                self._pm.kill()
+                return
+
+            print_message(f'脚本子进程创建成功 {script_path}', level='PASS')
+            if script_config.no_log_timeout_seconds > 0:
+                self._state.last_log_time = time.time()
+
+            try:
+                self.wait_and_cleanup()
+            except _NoLogTimeoutError:
+                _cleanup_processes(script_config, self._pm, force_script=True)
+                raise
+        finally:
+            _active_pm = None
+
+    def wait_and_cleanup(self) -> None:
+        """等待脚本完成并清理进程。
+
+        阻塞与非阻塞共用同一份轮询循环，差异仅由 ``_is_done`` 的完成判定决定：
+        - 阻塞：等待游戏/脚本关闭（见 ``_is_blocking_done``）。
+        - 非阻塞：仅等待直接启动的进程退出。
+        若 ``_is_blocking_done`` 抛出 ``_NoLogTimeoutError``，会向上传播交由重试层处理。
+        """
+        assert self._pm is not None  # run_once 已确保启动后再进入等待
+        deadline = time.time() + max(self._script_config.run_timeout_seconds, 0)
+        done = False
+        while time.time() < deadline:
+            if self._is_done():
+                done = True
+                break
+            if _exit_controller.wait(1):
+                break
+        if not done and not _exit_controller.is_shutdown_requested():
+            print_message(f'脚本运行超时 {self._script_config.script_display_name}', level='ERROR')
+        _cleanup_processes(self._script_config, self._pm)
+
+    def _is_done(self) -> bool:
+        """每拍的完成判定：非阻塞仅看直接进程是否退出，阻塞走游戏/脚本关闭判定。"""
+        assert self._pm is not None  # run_once 已确保启动后再进入等待
+        if self._non_block:
+            return not self._pm.is_running()
+        return self._is_blocking_done()
+
+    def _is_blocking_done(self) -> bool:
+        """阻塞完成的每拍判定：游戏/脚本关闭判定 + 无日志超时。"""
+        script_config = self._script_config
+        state = self._state
+        pm = self._pm
+        assert pm is not None  # run_once 已确保启动后再进入等待
 
         # 检查游戏进程状态
         game_current_existed = is_process_existed(script_config.game_process_name)
@@ -363,15 +459,15 @@ def _monitor_script_done(
             status = f'等待 {script_config.check_done_display_name}'
 
         # 仅在状态变化时打印
-        if status != last_status:
+        if status != self._last_status:
             print_message(status, level='PASS' if state.game_ever_existed else 'INFO')
-            if not state.game_ever_existed and not game_hint_printed and script_config.game_process_name:
+            if not state.game_ever_existed and not self._game_hint_printed and script_config.game_process_name:
                 print_message(
                     _format_process_hint('游戏进程名称', script_config.game_process_name),
                     level='INFO',
                 )
-                game_hint_printed = True
-            last_status = status
+                self._game_hint_printed = True
+            self._last_status = status
 
         # 检查脚本进程状态
         script_current_existed = pm.is_running()
@@ -381,7 +477,7 @@ def _monitor_script_done(
             script_config.launcher_mode
             and
             not state.script_ever_existed
-            and not script_hint_printed
+            and not self._script_hint_printed
             and script_config.script_process_name
             and script_config.check_done in (
                 CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value,
@@ -392,9 +488,10 @@ def _monitor_script_done(
                 _format_process_hint('启动后实际运行的程序', script_config.script_process_name),
                 level='INFO',
             )
-            script_hint_printed = True
+            self._script_hint_printed = True
 
         # 判断完成条件
+        is_done = False
         if script_config.check_done == CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value:
             if game_closed or script_closed:
                 is_done = True
@@ -411,17 +508,12 @@ def _monitor_script_done(
             print_message(f'未知的检查结束方式 {script_config.check_done}', level='ERROR')
             is_done = True
 
-        now = time.time()
-
-        # 总运行超时检查
-        if now - start_time > script_config.run_timeout_seconds:
-            is_done = True
-            print_message(f'脚本运行超时 {script_config.script_display_name}', level='ERROR')
-
         if is_done:
-            break
+            return True
 
         # 静默超时检查（无日志输出超时，触发重启）
+        now = time.time()
+        no_log_timeout = script_config.no_log_timeout_seconds
         if (
             no_log_timeout > 0
             and state.last_log_time is not None
@@ -433,8 +525,39 @@ def _monitor_script_done(
             )
             raise _NoLogTimeoutError()
 
-        if _exit_controller.wait(1):
-            break
+        return False
+
+
+class _NonBlockScriptRun(_ScriptRun):
+    """非阻塞脚本运行：继承 _ScriptRun，重写 run_once 仅启动并登记。
+
+    启动时不追踪 launcher 目标进程（避免同步阻塞搜索），不等待就绪、不原地等待，
+    等待完成与清理交由 run_chain 末尾的 _wait_non_block_procs 统一处理。
+    """
+
+    def __init__(
+        self,
+        script_config: ScriptConfig,
+        log_notifier: LogNotifier | None = None,
+        state: _RunMonitorState | None = None,
+        registry: list[_ScriptRun] | None = None,
+    ) -> None:
+        super().__init__(script_config, log_notifier, state)
+        self._non_block = True
+        self._registry = registry
+
+    def _launch(self) -> ProcessManager:
+        """非阻塞启动：不追踪 launcher 目标进程。"""
+        return _launch_script(self._script_config, None, self._log_notifier, self._state)
+
+    def run_once(self) -> None:
+        """非阻塞的一次生命周期：校验 → 启动 → 登记延后等待与清理。"""
+        if not self._prepare():
+            return
+        print_message(f'非阻塞启动脚本 {self._script_config.script_display_name}', level='PASS')
+        _non_block_pms.append(self._pm)
+        if self._registry is not None:
+            self._registry.append(self)
 
 
 def _cleanup_processes(script_config: ScriptConfig, pm: ProcessManager, force_script: bool = False) -> None:
@@ -471,90 +594,23 @@ def _cleanup_processes(script_config: ScriptConfig, pm: ProcessManager, force_sc
                 log.error('关闭游戏进程失败', exc_info=True)
 
 
-def _run_script_once(
-    script_config: ScriptConfig,
-    log_notifier: LogNotifier | None = None,
-) -> None:
-    """运行单个脚本的一次完整生命周期。
-
-    流程:
-        1. 校验配置。
-        2. 启动子进程（使用 ProcessManager）。
-        3. 等待子进程就绪。
-        4. 监控运行状态。
-        5. 清理进程。
-
-    静默超时逻辑:
-        当 script_config.no_log_timeout_seconds > 0 时，若脚本在指定时间内没有任何
-        日志输出，则认为游戏/脚本未响应，会终止当前进程并向调用方抛出
-        _NoLogTimeoutError，由链编排层决定是否重试和发送通知。
-
-    Args:
-        script_config: 脚本配置。
-        log_notifier: 可选的日志通知器，用于定时推送日志。
-    """
-    global _active_pm
-
-    invalid_message = script_config.invalid_message
-    if invalid_message is not None:
-        print_message(f'脚本配置不合法 跳过运行 {invalid_message}')
-        return
-
-    script_path = script_config.script_path
-    no_log_timeout = script_config.no_log_timeout_seconds
-    target_process_infos = None
-    if script_config.launcher_mode:
-        target_process_infos = _get_target_process_infos(
-            script_path,
-            script_config.script_process_name,
-        ) or None
-
-    # 1. 启动脚本子进程
-    state = _RunMonitorState()
-    pm = _launch_script(script_config, target_process_infos, log_notifier, state)
-    _active_pm = pm
-    try:
-        # 2. 等待子进程就绪
-        # 仅在启动器模式下，且存在与启动文件不同名的候选进程时，才期望追踪目标进程
-        expect_target = bool(target_process_infos)
-        if not _wait_for_subprocess_ready(
-            pm,
-            script_path,
-            state,
-            expect_target=expect_target,
-            missing_process_hint=_format_process_hint('启动后实际运行的程序', script_config.script_process_name),
-        ):
-            print_message(f'子进程创建失败 {script_path}', level='ERROR')
-            pm.kill()
-            return
-
-        print_message(f'脚本子进程创建成功 {script_path}', level='PASS')
-        if no_log_timeout > 0:
-            state.last_log_time = time.time()
-
-        # 3. 监控脚本运行状态
-        try:
-            _monitor_script_done(script_config, state, pm)
-        except _NoLogTimeoutError:
-            _cleanup_processes(script_config, pm, force_script=True)
-            raise
-
-        # 4. 清理进程（正常退出路径）
-        _cleanup_processes(script_config, pm)
-    finally:
-        _active_pm = None
-
-
 def _run_external_script_with_retries(
     script_config: ScriptConfig,
     log_notifier: LogNotifier | None = None,
     ctx: ScriptChainerContext | None = None,
     chain_label: str = '',
+    non_block_procs: list[_ScriptRun] | None = None,
 ) -> None:
-    """运行外部脚本，并在静默超时时按配置重试。"""
+    """运行外部脚本。
+
+    - block=True（或 non_block_procs 未传入）：阻塞运行，并在静默超时时按配置重试。
+    - block=False 且传入 non_block_procs：仅启动一次并立即返回，由 run_chain 末尾统一等待与清理。
+      非阻塞路径不追踪 launcher 目标进程，避免同步阻塞搜索。
+    """
+    non_block = non_block_procs is not None and not script_config.block
     max_retries = (
         script_config.no_log_max_retries
-        if script_config.no_log_timeout_seconds > 0
+        if (not non_block and script_config.no_log_timeout_seconds > 0)
         else 0
     )
     for retry_count in range(max_retries + 1):
@@ -574,7 +630,12 @@ def _run_external_script_with_retries(
                     script_config,
                 )
         try:
-            _run_script_once(script_config, log_notifier)
+            run = (
+                _NonBlockScriptRun(script_config, log_notifier, registry=non_block_procs)
+                if non_block
+                else _ScriptRun(script_config, log_notifier)
+            )
+            run.run_once()
             return
         except _NoLogTimeoutError:
             if retry_count < max_retries:
@@ -592,13 +653,20 @@ def _run_script_in_group(
     log_notifier: LogNotifier | None = None,
     ctx: ScriptChainerContext | None = None,
     chain_label: str = '',
+    non_block_procs: list[_ScriptRun] | None = None,
 ) -> None:
-    """运行运行组中的单个脚本。"""
+    """运行运行组中的单个脚本。
+
+    非阻塞（``block=False``）仅支持外部脚本：Python 脚本在当前进程内 exec，
+    无法后台化，遇到 ``block=False`` 时按阻塞方式运行并提示。
+    """
     try:
         if script_config.script_type == ScriptType.PYTHON:
+            if not script_config.block:
+                print_message(f'Python 脚本不支持非阻塞 按阻塞运行 {script_config.script_display_name}')
             _run_python_script(script_config, log_notifier)
         else:
-            _run_external_script_with_retries(script_config, log_notifier, ctx, chain_label)
+            _run_external_script_with_retries(script_config, log_notifier, ctx, chain_label, non_block_procs)
     except Exception:
         log.error('脚本执行异常', exc_info=True)
 
@@ -660,7 +728,7 @@ def _run_python_script(
         # 只有当前进程内 exec 用户 Python 脚本时，控制台关闭才需要额外强退兜底。
         # Ctrl+C / Ctrl+Break 仍走 install_handlers() 注册的普通 signal 软退出链。
         with force_exit_on_console_close(
-            lambda: _exit_controller.exit(_cleanup_all_pms, force=True)
+            lambda: _exit_controller.exit(_cleanup_active_pm, force=True)
         ):
             exec(compile(code, script_path, 'exec'), exec_globals)
             if _exit_controller.is_shutdown_requested():
@@ -685,82 +753,24 @@ def _run_python_script(
             os.chdir(old_cwd)
 
 
-def _cleanup_all_pms():
-    """清理当前活跃进程与所有非阻塞后台进程。
-
-    用于信号处理、控制台关闭与 atexit：确保退出时不会遗留游离的后台脚本。
-    """
-    global _active_pm, _background_pms
-    for pm in (_active_pm, *_background_pms):
+def _cleanup_active_pm():
+    """清理当前活跃的 ProcessManager 子进程，以及所有非阻塞后台子进程。"""
+    global _active_pm, _non_block_pms
+    for pm in (_active_pm, *_non_block_pms):
         if pm is not None:
             with suppress(Exception):
                 pm.kill()
     _active_pm = None
-    _background_pms = []
+    _non_block_pms = []
 
 
-def _launch_non_blocking(
-    script_config: ScriptConfig,
-    log_notifier: LogNotifier | None,
-    background: list,
-) -> None:
-    """后台启动非阻塞脚本：启动后立即返回，交由 run_chain 末尾统一等待与清理。
+def _wait_non_block_procs(non_block_procs: list[_ScriptRun]) -> None:
+    """等待所有非阻塞后台脚本完成（受各自 run_timeout_seconds 约束），随后清理。
 
-    外部脚本与 Python 脚本均通过 ProcessManager 以独立子进程启动（Python 脚本以
-    ``sys.executable <path>`` 方式启动，隔离 cwd/argv）。不追踪目标进程，避免
-    launcher 模式下的同步阻塞搜索；后台进程的存活仅以直接启动的进程为准。
+    复用与阻塞脚本完全相同的 _ScriptRun.wait_and_cleanup 生命周期。
     """
-    invalid = script_config.invalid_message
-    if invalid is not None:
-        print_message(f'脚本配置不合法 跳过运行(非阻塞) {invalid}')
-        return
-
-    program: str
-    args: list[str] = []
-    if script_config.script_arguments and script_config.script_arguments.strip():
-        args = shlex.split(script_config.script_arguments, posix=False)
-    if script_config.script_type == ScriptType.PYTHON:
-        program = sys.executable
-        args = [script_config.script_path, *args]
-    else:
-        program = script_config.script_path
-
-    pm = ProcessManager()
-    try:
-        ok = pm.open_process(
-            program=program,
-            args=args,
-            target_process=None,
-            stdout_callback=_make_stdout_callback(script_config.script_display_name, log_notifier),
-        )
-    except Exception:
-        log.error('启动非阻塞脚本失败', exc_info=True)
-        print_message(f'非阻塞脚本启动失败 {script_config.script_display_name}', level='ERROR')
-        return
-    if not ok:
-        print_message(f'非阻塞脚本启动失败 {script_config.script_display_name}', level='ERROR')
-        pm.kill()
-        return
-    print_message(f'非阻塞启动脚本 {script_config.script_display_name}', level='PASS')
-    background.append((script_config, pm))
-    _background_pms.append(pm)
-
-
-def _wait_for_process_exit(pm: ProcessManager, timeout: float) -> None:
-    """轮询等待 ProcessManager 管理的进程退出，尊重关闭信号。"""
-    start = time.time()
-    while pm.is_running():
-        if _exit_controller.wait(1):
-            return
-        if time.time() - start > max(timeout, 0):
-            break
-
-
-def _wait_background_scripts(background: list) -> None:
-    """等待所有非阻塞后台脚本完成（受各自 run_timeout_seconds 约束），随后清理。"""
-    for script_config, pm in background:
-        _wait_for_process_exit(pm, script_config.run_timeout_seconds)
-        _cleanup_processes(script_config, pm)
+    for run in non_block_procs:
+        run.wait_and_cleanup()
 
 
 def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_delay: int = 0, debug_index: int | None = None) -> None:
@@ -776,8 +786,8 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
     configure_runner_runtime_logging()
 
     # 注册普通信号处理，控制台关闭强退仅在 Python exec 窗口内临时启用
-    _exit_controller.install_handlers(_cleanup_all_pms)
-    atexit.register(_cleanup_all_pms)
+    _exit_controller.install_handlers(_cleanup_active_pm)
+    atexit.register(_cleanup_active_pm)
 
     init(autoreset=True)
     chain_config: ScriptChainConfig = ScriptChainConfig(file_path=chain_config_path)
@@ -812,7 +822,7 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
             for message in skipped_messages:
                 print_message(message)
 
-            background: list[tuple[ScriptConfig, ProcessManager]] = []
+            non_block_procs: list[_ScriptRun] = []
 
             for group_idx, group in enumerate(runtime_groups):
                 log_notifier: LogNotifier | None = None
@@ -835,10 +845,7 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
                         )
 
                     for script_config in group.scripts:
-                        if script_config.block:
-                            _run_script_in_group(script_config, log_notifier, ctx, chain_label)
-                        else:
-                            _launch_non_blocking(script_config, log_notifier, background)
+                        _run_script_in_group(script_config, log_notifier, ctx, chain_label, non_block_procs)
 
                     if ctx is not None and group.host.notify_done:
                         _push_chain_notification(
@@ -858,9 +865,9 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
 
             print_message('已完成调试脚本' if debug_index is not None else '已完成全部脚本')
 
-            if background:
-                print_message(f'等待 {len(background)} 个非阻塞后台脚本完成')
-                _wait_background_scripts(background)
+            if non_block_procs:
+                print_message(f'等待 {len(non_block_procs)} 个非阻塞后台脚本完成')
+                _wait_non_block_procs(non_block_procs)
 
         if shutdown_delay > 0:
             cmd_utils.shutdown_sys(shutdown_delay)
