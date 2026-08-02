@@ -675,21 +675,34 @@ def _run_python_script(
     script_config: ScriptConfig,
     log_notifier: LogNotifier | None = None,
 ) -> None:
-    """执行 Python 类型的脚本。
+    """执行 Python 类型的脚本（由脚本配置驱动）。
 
-    读取 .py 文件并用 exec() 在当前进程中执行。
-
-    Args:
-        script_config: 脚本配置（script_type == 'python'）。
-        log_notifier: 可选的日志通知器，用于定时推送日志。
+    配置合法性校验通过后，委托 ``_exec_python_file`` 读取并在当前进程 exec。
     """
-    script_file = Path(script_config.script_path)
-    display_name = script_config.script_display_name
-
     invalid_msg = script_config.invalid_message
     if invalid_msg is not None:
         print_message(f'Python 脚本配置不合法 跳过运行 {invalid_msg}')
         return
+    _exec_python_file(script_config.script_path, script_config.script_display_name, log_notifier)
+
+
+def _exec_python_file(
+    script_path: str,
+    display_name: str | None = None,
+    log_notifier: LogNotifier | None = None,
+) -> None:
+    """读取 .py 文件并在当前进程 exec。
+
+    供脚本链的 python 类型脚本与 Runner ``--script`` 单文件模式复用。
+
+    Args:
+        script_path: .py 文件绝对/相对路径。
+        display_name: 显示名（缺省取文件名）。
+        log_notifier: 可选的日志通知器，用于定时推送日志。
+    """
+    script_file = Path(script_path)
+    if display_name is None:
+        display_name = script_file.stem
 
     try:
         code = script_file.read_text(encoding='utf-8')

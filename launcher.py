@@ -11,9 +11,18 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import sys
 
-from script_chainer.win_exe.script_runner import run_chain
+from colorama import init
+
+from script_chainer.win_exe.runner_logging import configure_runner_runtime_logging
+from script_chainer.win_exe.script_runner import (
+    _cleanup_active_pm,
+    _exec_python_file,
+    _exit_controller,
+    run_chain,
+)
 
 
 def main() -> None:
@@ -39,7 +48,25 @@ def main() -> None:
         default=None,
         help="仅调试指定下标脚本，并按挂靠关系一并纳入关联脚本",
     )
+    parser.add_argument(
+        "--script",
+        type=str,
+        default=None,
+        help="直接执行单个 Python 脚本文件（.py），供 GUI「启动脚本」在冻结模式下调用",
+    )
     args = parser.parse_args()
+
+    if args.script:
+        # 单文件模式：直接 exec 一个 .py，不经过脚本链编排。
+        # 用于 GUI「启动脚本」在冻结（PyInstaller）模式下替代 `python xxx.py`，
+        # 因为此时 sys.executable 指向 GUI 自身的 exe 而非 python 解释器。
+        init(autoreset=True)
+        configure_runner_runtime_logging()
+        _exit_controller.install_handlers(_cleanup_active_pm)
+        atexit.register(_cleanup_active_pm)
+        _exec_python_file(args.script)
+        sys.exit(0)
+
     run_chain(
         chain_config_path=args.chain,
         shutdown_delay=args.shutdown or 0,
