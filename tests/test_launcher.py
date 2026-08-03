@@ -20,6 +20,11 @@ if str(REPO_ROOT) not in sys.path:
 from launcher import main  # noqa: E402
 from script_chainer.win_exe import script_runner  # noqa: E402
 from script_chainer.win_exe.script_runner import run_chain  # noqa: E402
+from script_chainer.config.script_config import ScriptChainConfig  # noqa: E402
+from script_chainer.utils.runtime_group_utils import (  # noqa: E402
+    build_runtime_selection,
+    resolve_runtime_groups,
+)
 
 
 def _write_chain(tmp_dir: str, data: dict, name: str = "smoke") -> str:
@@ -38,6 +43,149 @@ def _write_external_script(tmp_dir: Path, name: str, py_file: Path) -> str:
         p.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{py_file}"\n', encoding="utf-8")
         p.chmod(0o755)
     return str(p)
+
+
+# 细粒度单测：脚本链解析（dry-run 等价物，纯函数、不启动进程）。
+# 复刻 run_chain 执行前的解析步骤，供 agent 在不拉起游戏（避开 1600s 超时）的
+# 前提下验证「--debug-index N 究竟会跑哪些脚本」。
+_BASE_SCRIPT = {
+    "script_type": "external",
+    "script_path": "C:/fake/game.exe",
+    "game_process_name": "YuanShen.exe",
+    "check_done": "game_or_script_closed",
+    "run_timeout_seconds": 100,
+    "block": True,
+    "attach_direction": "",
+    "enabled": True,
+}
+
+
+def _write_chain_scripts(scripts: list[dict]) -> str:
+    """写临时脚本链 yml（缺省字段用 _BASE_SCRIPT 填充），返回路径。"""
+    normalized = []
+    for i, s in enumerate(scripts):
+        item = dict(_BASE_SCRIPT)
+        item.update(s)
+        if "script_path" not in s:
+            item["script_path"] = f"C:/fake/script_{i}.exe"
+        normalized.append(item)
+    path = Path(tempfile.mkdtemp()) / "chain.yml"
+    path.write_text(
+        yaml.safe_dump({"script_list": normalized}, allow_unicode=True),
+        encoding="utf-8",
+    )
+    return str(path)
+
+
+def _resolve(chain_path: str, debug_index):
+    """复刻 run_chain 执行前的解析步骤，返回 (groups, skipped, cfg)。"""
+    cfg = ScriptChainConfig(file_path=chain_path)
+    targets = cfg.compute_attach_targets()
+    sel = build_runtime_selection(cfg.script_list, targets, debug_index=debug_index)
+    groups, skipped = resolve_runtime_groups(sel)
+    return groups, skipped, cfg
+
+
+class TestAttachTargets(unittest.TestCase):
+    """compute_attach_targets 对 attach_direction 的解析。"""
+
+    def test_pre_attaches_to_next_non_pre(self):
+        path = _write_chain_scripts([
+            {"display_name": "gameA"},
+            {"display_name": "stubB", "script_type": "python", "attach_direction": "pre"},
+            {"display_name": "gameC"},
+        ])
+        cfg = ScriptChainConfig(file_path=path)
+        targets = cfg.compute_attach_targets()
+        names = [t.display_name if t else None for t in targets]
+        self.assertEqual(names, [None, "gameC", None])
+
+    def test_post_attaches_to_prev_non_post(self):
+        path = _write_chain_scripts([
+            {"display_name": "gameA"},
+            {"display_name": "stubB", "script_type": "python", "attach_direction": "post"},
+            {"display_name": "gameC"},
+        ])
+        cfg = ScriptChainConfig(file_path=path)
+        targets = cfg.compute_attach_targets()
+        names = [t.display_name if t else None for t in targets]
+        self.assertEqual(names, [None, "gameA", None])
+
+    def test_no_attach_are_none(self):
+        path = _write_chain_scripts([
+            {"display_name": "gameA"},
+            {"display_name": "gameB"},
+        ])
+        cfg = ScriptChainConfig(file_path=path)
+        self.assertEqual(cfg.compute_attach_targets(), [None, None])
+
+
+class TestRuntimeSelection(unittest.TestCase):
+    """build_runtime_selection 按 debug_index 裁剪参与脚本。"""
+
+    def test_no_debug_index_selects_all(self):
+        path = _write_chain_scripts([{"display_name": "a"}, {"display_name": "b"}])
+        cfg = ScriptChainConfig(file_path=path)
+        sel = build_runtime_selection(cfg.script_list, cfg.compute_attach_targets())
+        self.assertEqual([s.display_name for s in sel.script_list], ["a", "b"])
+        self.assertIsNone(sel.debug_target)
+
+    def test_debug_index_keeps_target_only(self):
+        path = _write_chain_scripts([
+            {"display_name": "gameA"},
+            {"display_name": "stubB", "script_type": "python", "attach_direction": "pre"},
+            {"display_name": "gameC"},
+        ])
+        cfg = ScriptChainConfig(file_path=path)
+        targets = cfg.compute_attach_targets()
+        sel = build_runtime_selection(cfg.script_list, targets, debug_index=0)
+        self.assertEqual([s.display_name for s in sel.script_list], ["gameA"])
+        self.assertEqual(sel.debug_target.display_name, "gameA")
+
+    def test_debug_index_out_of_range_raises(self):
+        path = _write_chain_scripts([{"display_name": "gameA"}])
+        cfg = ScriptChainConfig(file_path=path)
+        with self.assertRaises(ValueError):
+            build_runtime_selection(
+                cfg.script_list, cfg.compute_attach_targets(), debug_index=5
+            )
+
+
+class TestResolveRuntimeGroups(unittest.TestCase):
+    """resolve_runtime_groups 的 enabled 过滤 / 挂靠跳过 / 分组合并。"""
+
+    def test_disabled_script_skipped(self):
+        path = _write_chain_scripts([
+            {"display_name": "gameA"},
+            {"display_name": "gameB", "enabled": False},
+        ])
+        groups, skipped, _ = _resolve(path, None)
+        self.assertEqual([g.host.display_name for g in groups], ["gameA"])
+        self.assertIn("脚本已禁用 跳过 gameB", skipped)
+
+    def test_attached_to_disabled_skipped(self):
+        path = _write_chain_scripts([
+            {"display_name": "gameA"},
+            {"display_name": "stubB", "script_type": "python", "attach_direction": "pre"},
+            {"display_name": "gameC", "enabled": False},
+        ])
+        groups, skipped, _ = _resolve(path, None)
+        self.assertEqual([g.host.display_name for g in groups], ["gameA"])
+        self.assertIn("被挂靠脚本已禁用 跳过 stubB", skipped)
+
+    def test_consecutive_same_host_merged(self):
+        # stubB 用 post 挂靠到前方的 gameA，二者应并入同一运行组。
+        path = _write_chain_scripts([
+            {"display_name": "gameA"},
+            {"display_name": "stubB", "script_type": "python", "attach_direction": "post"},
+            {"display_name": "gameC"},
+        ])
+        cfg = ScriptChainConfig(file_path=path)
+        targets = cfg.compute_attach_targets()
+        sel = build_runtime_selection(cfg.script_list, targets, debug_index=0)
+        groups, _ = resolve_runtime_groups(sel)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual([s.display_name for s in groups[0].scripts], ["gameA", "stubB"])
 
 
 class TestLauncherArgParsing(unittest.TestCase):
@@ -65,6 +213,35 @@ class TestLauncherArgParsing(unittest.TestCase):
         self.assertEqual(kwargs["chain_config_path"], "config/script_chain/88.yml")
         self.assertIsNone(kwargs["debug_index"])
         self.assertEqual(kwargs["shutdown_delay"], 0)
+
+    def test_shutdown_flag_const(self):
+        with mock.patch("launcher.run_chain") as rc, \
+             mock.patch.object(sys, "exit"):
+            sys.argv = ["launcher", "-s"]
+            main()
+        kwargs = rc.call_args.kwargs
+        self.assertEqual(kwargs["shutdown_delay"], 60)
+        self.assertIsNone(kwargs["debug_index"])
+
+    def test_shutdown_flag_with_value(self):
+        with mock.patch("launcher.run_chain") as rc, \
+             mock.patch.object(sys, "exit"):
+            sys.argv = ["launcher", "--shutdown", "30"]
+            main()
+        kwargs = rc.call_args.kwargs
+        self.assertEqual(kwargs["shutdown_delay"], 30)
+
+    def test_script_branch_runs_single_file(self):
+        # --script 单文件模式：直接 exec .py，不经过脚本链编排，不调 run_chain。
+        # 注意：不能 mock sys.exit，否则 sys.exit(0) 变空操作、执行会穿透到末尾的
+        # run_chain(...)；这里让 sys.exit(0) 真正抛 SystemExit 以终止分支。
+        with mock.patch("launcher.run_chain") as rc, \
+             mock.patch("launcher._exec_python_file") as ef:
+            sys.argv = ["launcher", "--script", "C:/fake/stub.py"]
+            with self.assertRaises(SystemExit):
+                main()
+        ef.assert_called_once_with("C:/fake/stub.py")
+        rc.assert_not_called()
 
 
 class TestLauncherRunsThrough(unittest.TestCase):
