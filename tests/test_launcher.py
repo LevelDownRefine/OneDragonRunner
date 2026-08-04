@@ -18,13 +18,13 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from launcher import main  # noqa: E402
-from script_chainer.win_exe import script_runner  # noqa: E402
-from script_chainer.win_exe.script_runner import run_chain  # noqa: E402
 from script_chainer.config.script_config import ScriptChainConfig  # noqa: E402
 from script_chainer.utils.runtime_group_utils import (  # noqa: E402
     build_runtime_selection,
     resolve_runtime_groups,
 )
+from script_chainer.win_exe import script_runner  # noqa: E402
+from script_chainer.win_exe.script_runner import run_chain  # noqa: E402
 
 
 def _write_chain(tmp_dir: str, data: dict, name: str = "smoke") -> str:
