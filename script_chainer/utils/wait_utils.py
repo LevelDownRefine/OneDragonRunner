@@ -4,7 +4,9 @@ import threading
 import time
 
 
-def wait_with_cancel(stop_event: threading.Event, seconds: float, step: float = 0.1) -> bool:
+def wait_with_cancel(
+    stop_event: threading.Event, seconds: float, step: float = 0.1
+) -> bool:
     """可被事件打断的等待。"""
     if step <= 0 or seconds < 0:
         raise ValueError("输入参数不合法")

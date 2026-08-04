@@ -6,15 +6,15 @@ from pathlib import Path
 
 from script_chainer.utils import os_utils
 
-LOGGER_NAME = 'OneDragon'
-_HANDLER_OWNER_ATTR = '_one_dragon_logger_owner'
+LOGGER_NAME = "OneDragon"
+_HANDLER_OWNER_ATTR = "_one_dragon_logger_owner"
 
 
 @dataclass(slots=True)
 class LoggerConfig:
     level: int = logging.INFO
     log_file_path: str | None = None
-    default_name: str = 'log.txt'
+    default_name: str = "log.txt"
     add_console_handler: bool = True
     propagate: bool = False
 
@@ -31,8 +31,8 @@ class ProjectRuntimeLoggingContext:
 
 def get_log_formatter() -> logging.Formatter:
     return logging.Formatter(
-        '[%(asctime)s.%(msecs)03d] [%(filename)s %(lineno)d] [%(levelname)s]: %(message)s',
-        '%H:%M:%S',
+        "[%(asctime)s.%(msecs)03d] [%(filename)s %(lineno)d] [%(levelname)s]: %(message)s",
+        "%H:%M:%S",
     )
 
 
@@ -51,7 +51,9 @@ def configure_logger(logger: logging.Logger, config: LoggerConfig) -> logging.Lo
     return logger
 
 
-def get_or_create_logger(name: str, config: LoggerConfig | None = None) -> logging.Logger:
+def get_or_create_logger(
+    name: str, config: LoggerConfig | None = None
+) -> logging.Logger:
     """获取指定名称的 logger。
 
     - 若框架尚未为该 logger 挂载默认 handler，则按给定配置初始化
@@ -81,11 +83,11 @@ def configure_project_runtime_logging(
     """
     if project_logger_name == framework_logger_name:
         raise ValueError(
-            'configure_project_runtime_logging 需要不同的 '
-            'project_logger_name 和 framework_logger_name；否则 '
-            '_configure_runtime_logger 会对同一个 logger 调用两次 '
-            '_close_managed_handlers，导致 ProjectRuntimeLoggingContext '
-            '静默丢失其中一套 handler 配置。'
+            "configure_project_runtime_logging 需要不同的 "
+            "project_logger_name 和 framework_logger_name；否则 "
+            "_configure_runtime_logger 会对同一个 logger 调用两次 "
+            "_close_managed_handlers，导致 ProjectRuntimeLoggingContext "
+            "静默丢失其中一套 handler 配置。"
         )
 
     project_logger = logging.getLogger(project_logger_name)
@@ -129,20 +131,22 @@ def _configure_runtime_logger(
     )
 
 
-def get_log_file_path(log_file_path: str | None = None, default_name: str = 'log.txt') -> str:
+def get_log_file_path(
+    log_file_path: str | None = None, default_name: str = "log.txt"
+) -> str:
     """获取日志文件路径。
 
     - 未传 `log_file_path` 时，使用工作目录 `.log/` 下的默认文件名
     - 传相对路径/文件名时，仍然放在工作目录 `.log/` 下
     - 传绝对路径时，直接使用
     """
-    configured = (log_file_path or '').strip()
+    configured = (log_file_path or "").strip()
     if not configured:
         configured = default_name
     path = Path(configured)
     if path.is_absolute():
         return str(path)
-    return str(Path(os_utils.get_path_under_work_dir('.log')) / path)
+    return str(Path(os_utils.get_path_under_work_dir(".log")) / path)
 
 
 def get_logger() -> logging.Logger:
@@ -176,9 +180,9 @@ def mask_text(text: str) -> str:
     :return: 脱敏后的文本
     """
     if len(text) < 5:
-        return text[0] + '*' * (len(text) - 1)
+        return text[0] + "*" * (len(text) - 1)
     else:
-        return text[:2] + '*' * (len(text) - 4) + text[-2:]
+        return text[:2] + "*" * (len(text) - 4) + text[-2:]
 
 
 def _close_managed_handlers(logger: logging.Logger) -> None:
@@ -190,17 +194,21 @@ def _close_managed_handlers(logger: logging.Logger) -> None:
             handler.close()
 
 
-def _handler_belongs_to_logger(handler: logging.Handler, logger: logging.Logger) -> bool:
+def _handler_belongs_to_logger(
+    handler: logging.Handler, logger: logging.Logger
+) -> bool:
     return getattr(handler, _HANDLER_OWNER_ATTR, None) == logger.name
 
 
-def _build_file_handler(logger: logging.Logger, config: LoggerConfig) -> logging.Handler:
+def _build_file_handler(
+    logger: logging.Logger, config: LoggerConfig
+) -> logging.Handler:
     handler = TimedRotatingFileHandler(
         get_log_file_path(config.log_file_path, default_name=config.default_name),
-        when='midnight',
+        when="midnight",
         interval=1,
         backupCount=3,
-        encoding='utf-8',
+        encoding="utf-8",
         delay=True,
     )
     return _prepare_handler(handler, logger, config)

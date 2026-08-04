@@ -7,8 +7,11 @@ from script_chainer.utils import os_utils
 from script_chainer.utils.log_utils import log
 
 
-def run_command(commands: List[str], cwd: Optional[str] = None,
-                message_callback: Optional[Callable[[str], None]] = None) -> Optional[str]:
+def run_command(
+    commands: List[str],
+    cwd: Optional[str] = None,
+    message_callback: Optional[Callable[[str], None]] = None,
+) -> Optional[str]:
     """
     执行命令行
     :param commands: 需要执行的命令
@@ -16,7 +19,7 @@ def run_command(commands: List[str], cwd: Optional[str] = None,
     :param message_callback: 命令行日志的回调
     :return 执行结果的 stdout
     """
-    command_str = ' '.join(commands)
+    command_str = " ".join(commands)
     log.info(command_str)
     if message_callback is not None:
         message_callback(command_str)
@@ -31,31 +34,39 @@ def run_command(commands: List[str], cwd: Optional[str] = None,
         # 为子进程指定不创建新窗口的标志
         creationflags = subprocess.CREATE_NO_WINDOW
 
-        process = subprocess.Popen(commands, cwd=cwd,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1,
-                                   text=True,
-                                   encoding='utf-8',  # 指定编码为 GBK
-                                   errors='ignore',  # 忽略解码错误
-                                   startupinfo=startupinfo,
-                                   creationflags=creationflags
-                                   )
+        process = subprocess.Popen(
+            commands,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=1,
+            text=True,
+            encoding="utf-8",  # 指定编码为 GBK
+            errors="ignore",  # 忽略解码错误
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+        )
 
-        result_str: str = ''
+        result_str: str = ""
 
         def read_pipe(pipe, log_func):
             nonlocal result_str
-            for line in iter(pipe.readline, ''):
+            for line in iter(pipe.readline, ""):
                 line_strip = line.strip().strip('"')
                 if len(line_strip) == 0:
                     continue
                 log_func(line_strip)
                 if message_callback is not None:
                     message_callback(line_strip)
-                result_str = result_str + '\n' + line_strip
+                result_str = result_str + "\n" + line_strip
 
         # 创建两个线程分别处理 stdout 和 stderr
-        stdout_thread = threading.Thread(target=read_pipe, args=(process.stdout, log.info))
-        stderr_thread = threading.Thread(target=read_pipe, args=(process.stderr, log.error))
+        stdout_thread = threading.Thread(
+            target=read_pipe, args=(process.stdout, log.info)
+        )
+        stderr_thread = threading.Thread(
+            target=read_pipe, args=(process.stderr, log.error)
+        )
 
         # 启动线程
         stdout_thread.start()
@@ -95,5 +106,5 @@ def cancel_shutdown_sys():
     os.system("shutdown /a")
 
 
-if __name__ == '__main__':
-    run_command(['taskkill', '/F', '/IM', 'git.exe'])
+if __name__ == "__main__":
+    run_command(["taskkill", "/F", "/IM", "git.exe"])

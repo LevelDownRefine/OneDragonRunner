@@ -92,7 +92,9 @@ class _TeeWriter:
         return getattr(self._original, name)
 
 
-def _get_target_process_infos(script_path: str, configured_process_name: list[str]) -> list[ProcessInfo]:
+def _get_target_process_infos(
+    script_path: str, configured_process_name: list[str]
+) -> list[ProcessInfo]:
     """获取需要追踪的目标进程列表。
 
     若某个候选名称与启动文件同名，则它属于直接启动进程，
@@ -106,9 +108,11 @@ def _get_target_process_infos(script_path: str, configured_process_name: list[st
     ]
 
 
-def _format_process_hint(field_label: str, process_names: str | list[str] | None) -> str:
-    display = ' / '.join(normalize_process_names(process_names)) or '(空)'
-    return f'如长时间未检测到进程，请检查“{field_label}”填写是否正确：{display}'
+def _format_process_hint(
+    field_label: str, process_names: str | list[str] | None
+) -> str:
+    display = " / ".join(normalize_process_names(process_names)) or "(空)"
+    return f"如长时间未检测到进程，请检查“{field_label}”填写是否正确：{display}"
 
 
 class _RunnerExitController:
@@ -139,7 +143,7 @@ class _RunnerExitController:
 
         signal.signal(signal.SIGINT, _on_exit_signal)
         signal.signal(signal.SIGTERM, _on_exit_signal)
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             signal.signal(signal.SIGBREAK, _on_exit_signal)
 
 
@@ -148,9 +152,26 @@ _exit_controller = _RunnerExitController()
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--chain', type=str, default='config/script_chain/88.yml', help='脚本链配置文件路径（.yml）')
-    parser.add_argument('-s', '--shutdown', type=int, nargs='?', const=60, help='运行后关机延迟秒数，默认60秒')
-    parser.add_argument('--debug-index', type=int, default=None, help='仅调试指定下标脚本，并按挂靠关系一并编排（禁用项仍会跳过）')
+    parser.add_argument(
+        "--chain",
+        type=str,
+        default="config/script_chain/88.yml",
+        help="脚本链配置文件路径（.yml）",
+    )
+    parser.add_argument(
+        "-s",
+        "--shutdown",
+        type=int,
+        nargs="?",
+        const=60,
+        help="运行后关机延迟秒数，默认60秒",
+    )
+    parser.add_argument(
+        "--debug-index",
+        type=int,
+        default=None,
+        help="仅调试指定下标脚本，并按挂靠关系一并编排（禁用项仍会跳过）",
+    )
 
     return parser.parse_args()
 
@@ -159,7 +180,11 @@ def print_message(message: str, level="INFO"):
     # 打印消息，带有时间戳和日志级别
     _exit_controller.wait(0.1)
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
-    colors = {"INFO": Fore.CYAN, "ERROR": Fore.YELLOW + Style.BRIGHT, "PASS": Fore.GREEN}
+    colors = {
+        "INFO": Fore.CYAN,
+        "ERROR": Fore.YELLOW + Style.BRIGHT,
+        "PASS": Fore.GREEN,
+    }
     color = colors.get(level, Fore.WHITE)
     print(f"{timestamp} | {color}{level}{Style.RESET_ALL} | {message}")
     log.info(message)
@@ -176,7 +201,7 @@ def _push_chain_notification(
         return
     ctx.push_service.push_async(
         title=ctx.notify_config.title,
-        content=f'脚本链 {chain_label} {action}: {script_config.script_display_name}',
+        content=f"脚本链 {chain_label} {action}: {script_config.script_display_name}",
     )
 
 
@@ -192,11 +217,11 @@ def _make_stdout_callback(
         log_notifier: 可选的日志通知器，用于定时推送日志。
         state: 可选的运行监控状态，用于记录最后一次收到日志的时间戳。
     """
-    prefix = f'{Style.DIM}[{display_name}]{Style.RESET_ALL}'
+    prefix = f"{Style.DIM}[{display_name}]{Style.RESET_ALL}"
 
     def _on_stdout(line: str) -> None:
-        print(f'{prefix} {line}', flush=True)
-        log.info('[脚本] %s', line)
+        print(f"{prefix} {line}", flush=True)
+        log.info("[脚本] %s", line)
         if log_notifier is not None:
             log_notifier.add(line)
         if state is not None:
@@ -235,7 +260,11 @@ def _launch_script(
 
     pm = ProcessManager()
     try:
-        display_name = script_config.game_display_name or script_config.script_display_name or PurePath(script_path).name
+        display_name = (
+            script_config.game_display_name
+            or script_config.script_display_name
+            or PurePath(script_path).name
+        )
         success = pm.open_process(
             program=script_path,
             args=args_list,
@@ -244,18 +273,20 @@ def _launch_script(
             stdout_callback=_make_stdout_callback(display_name, log_notifier, state),
         )
     except LauncherExitError as e:
-        log.error('启动器异常退出: %s', e, exc_info=True)
-        print_message(f'启动器异常退出 {script_path} (rc={e.returncode})', level='ERROR')
+        log.error("启动器异常退出: %s", e, exc_info=True)
+        print_message(
+            f"启动器异常退出 {script_path} (rc={e.returncode})", level="ERROR"
+        )
         return pm
     except Exception:
-        log.error('启动子进程失败: %s', script_path, exc_info=True)
-        print_message(f'脚本进程启动失败 {script_path}', level='ERROR')
+        log.error("启动子进程失败: %s", script_path, exc_info=True)
+        print_message(f"脚本进程启动失败 {script_path}", level="ERROR")
         return pm
 
     if success:
-        print_message(f'脚本进程启动成功 {script_path}', level='PASS')
+        print_message(f"脚本进程启动成功 {script_path}", level="PASS")
     else:
-        print_message(f'脚本进程启动失败 {script_path}', level='ERROR')
+        print_message(f"脚本进程启动失败 {script_path}", level="ERROR")
 
     return pm
 
@@ -295,7 +326,7 @@ def _wait_for_subprocess_ready(
 
         if pm.is_running():
             state.script_ever_existed = True
-            print_message(f'创建脚本子进程 {script_path}')
+            print_message(f"创建脚本子进程 {script_path}")
             return True
         else:
             # 进程已退出
@@ -304,13 +335,17 @@ def _wait_for_subprocess_ready(
                 if rc == 0:
                     if expect_target and pm.target_process is None:
                         # launcher 退出但目标进程未就绪，继续等待
-                        print_message(f'启动器已退出 (rc=0)，等待目标进程 {script_path}')
+                        print_message(
+                            f"启动器已退出 (rc=0)，等待目标进程 {script_path}"
+                        )
                     else:
                         state.script_ever_existed = True
-                        print_message(f'启动器已退出 (rc=0) {script_path}')
+                        print_message(f"启动器已退出 (rc=0) {script_path}")
                         return True
                 else:
-                    print_message(f'子进程异常退出 (rc={rc}) {script_path}', level='ERROR')
+                    print_message(
+                        f"子进程异常退出 (rc={rc}) {script_path}", level="ERROR"
+                    )
 
         if now - start_time > timeout:
             break
@@ -319,7 +354,7 @@ def _wait_for_subprocess_ready(
             break
 
     if expect_target and missing_process_hint:
-        print_message(missing_process_hint, level='ERROR')
+        print_message(missing_process_hint, level="ERROR")
 
     return False
 
@@ -343,7 +378,7 @@ class _ScriptRun:
         self._pm: ProcessManager | None = None
         self._target_process_infos: list[ProcessInfo] | None = None
         self._non_block = False
-        self._last_status: str = ''
+        self._last_status: str = ""
         self._game_hint_printed = False
         self._script_hint_printed = False
 
@@ -351,7 +386,7 @@ class _ScriptRun:
         """校验配置合法性；不合法时打印提示并返回 False。"""
         invalid_message = self._script_config.invalid_message
         if invalid_message is not None:
-            print_message(f'脚本配置不合法 跳过运行 {invalid_message}')
+            print_message(f"脚本配置不合法 跳过运行 {invalid_message}")
             return False
         return True
 
@@ -360,12 +395,17 @@ class _ScriptRun:
         script_config = self._script_config
         target_process_infos = None
         if script_config.launcher_mode:
-            target_process_infos = _get_target_process_infos(
-                script_config.script_path,
-                script_config.script_process_name,
-            ) or None
+            target_process_infos = (
+                _get_target_process_infos(
+                    script_config.script_path,
+                    script_config.script_process_name,
+                )
+                or None
+            )
         self._target_process_infos = target_process_infos
-        return _launch_script(script_config, target_process_infos, self._log_notifier, self._state)
+        return _launch_script(
+            script_config, target_process_infos, self._log_notifier, self._state
+        )
 
     def _prepare(self) -> bool:
         """校验配置并启动子进程；self._pm 就绪（process 非空）时返回 True。"""
@@ -390,13 +430,15 @@ class _ScriptRun:
                 script_path,
                 self._state,
                 expect_target=bool(self._target_process_infos),
-                missing_process_hint=_format_process_hint('启动后实际运行的程序', script_config.script_process_name),
+                missing_process_hint=_format_process_hint(
+                    "启动后实际运行的程序", script_config.script_process_name
+                ),
             ):
-                print_message(f'子进程创建失败 {script_path}', level='ERROR')
+                print_message(f"子进程创建失败 {script_path}", level="ERROR")
                 self._pm.kill()
                 return
 
-            print_message(f'脚本子进程创建成功 {script_path}', level='PASS')
+            print_message(f"脚本子进程创建成功 {script_path}", level="PASS")
             if script_config.no_log_timeout_seconds > 0:
                 self._state.last_log_time = time.time()
 
@@ -426,7 +468,9 @@ class _ScriptRun:
             if _exit_controller.wait(1):
                 break
         if not done and not _exit_controller.is_shutdown_requested():
-            print_message(f'脚本运行超时 {self._script_config.script_display_name}', level='ERROR')
+            print_message(
+                f"脚本运行超时 {self._script_config.script_display_name}", level="ERROR"
+            )
         _cleanup_processes(self._script_config, self._pm)
 
     def _is_done(self) -> bool:
@@ -450,21 +494,27 @@ class _ScriptRun:
 
         if script_config.game_display_name:
             if not state.game_ever_existed:
-                status = f'等待打开 {script_config.game_display_name}'
+                status = f"等待打开 {script_config.game_display_name}"
             elif game_current_existed:
-                status = f'正在运行 {script_config.game_display_name}'
+                status = f"正在运行 {script_config.game_display_name}"
             else:
-                status = f'运行结束 {script_config.game_display_name}'
+                status = f"运行结束 {script_config.game_display_name}"
         else:
-            status = f'等待 {script_config.check_done_display_name}'
+            status = f"等待 {script_config.check_done_display_name}"
 
         # 仅在状态变化时打印
         if status != self._last_status:
-            print_message(status, level='PASS' if state.game_ever_existed else 'INFO')
-            if not state.game_ever_existed and not self._game_hint_printed and script_config.game_process_name:
+            print_message(status, level="PASS" if state.game_ever_existed else "INFO")
+            if (
+                not state.game_ever_existed
+                and not self._game_hint_printed
+                and script_config.game_process_name
+            ):
                 print_message(
-                    _format_process_hint('游戏进程名称', script_config.game_process_name),
-                    level='INFO',
+                    _format_process_hint(
+                        "游戏进程名称", script_config.game_process_name
+                    ),
+                    level="INFO",
                 )
                 self._game_hint_printed = True
             self._last_status = status
@@ -475,37 +525,50 @@ class _ScriptRun:
         state.script_ever_existed = state.script_ever_existed or script_current_existed
         if (
             script_config.launcher_mode
-            and
-            not state.script_ever_existed
+            and not state.script_ever_existed
             and not self._script_hint_printed
             and script_config.script_process_name
-            and script_config.check_done in (
+            and script_config.check_done
+            in (
                 CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value,
                 CheckDoneMethods.SCRIPT_CLOSED.value.value,
             )
         ):
             print_message(
-                _format_process_hint('启动后实际运行的程序', script_config.script_process_name),
-                level='INFO',
+                _format_process_hint(
+                    "启动后实际运行的程序", script_config.script_process_name
+                ),
+                level="INFO",
             )
             self._script_hint_printed = True
 
         # 判断完成条件
         is_done = False
-        if script_config.check_done == CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value:
+        if (
+            script_config.check_done
+            == CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value
+        ):
             if game_closed or script_closed:
                 is_done = True
-                print_message(f'游戏或脚本被关闭 {script_config.game_display_name}', level='PASS')
+                print_message(
+                    f"游戏或脚本被关闭 {script_config.game_display_name}", level="PASS"
+                )
         elif script_config.check_done == CheckDoneMethods.GAME_CLOSED.value.value:
             if game_closed:
                 is_done = True
-                print_message(f'游戏被关闭 {script_config.game_display_name}', level='PASS')
+                print_message(
+                    f"游戏被关闭 {script_config.game_display_name}", level="PASS"
+                )
         elif script_config.check_done == CheckDoneMethods.SCRIPT_CLOSED.value.value:
             if script_closed:
                 is_done = True
-                print_message(f'脚本被关闭 {script_config.script_display_name}', level='PASS')
+                print_message(
+                    f"脚本被关闭 {script_config.script_display_name}", level="PASS"
+                )
         else:
-            print_message(f'未知的检查结束方式 {script_config.check_done}', level='ERROR')
+            print_message(
+                f"未知的检查结束方式 {script_config.check_done}", level="ERROR"
+            )
             is_done = True
 
         if is_done:
@@ -520,8 +583,8 @@ class _ScriptRun:
             and now - state.last_log_time > no_log_timeout
         ):
             print_message(
-                f'脚本超过 {no_log_timeout} 秒无日志输出，判定为未响应 {script_config.script_display_name}',
-                level='ERROR',
+                f"脚本超过 {no_log_timeout} 秒无日志输出，判定为未响应 {script_config.script_display_name}",
+                level="ERROR",
             )
             raise _NoLogTimeoutError()
 
@@ -548,19 +611,25 @@ class _NonBlockScriptRun(_ScriptRun):
 
     def _launch(self) -> ProcessManager:
         """非阻塞启动：不追踪 launcher 目标进程。"""
-        return _launch_script(self._script_config, None, self._log_notifier, self._state)
+        return _launch_script(
+            self._script_config, None, self._log_notifier, self._state
+        )
 
     def run_once(self) -> None:
         """非阻塞的一次生命周期：校验 → 启动 → 登记延后等待与清理。"""
         if not self._prepare():
             return
-        print_message(f'非阻塞启动脚本 {self._script_config.script_display_name}', level='PASS')
+        print_message(
+            f"非阻塞启动脚本 {self._script_config.script_display_name}", level="PASS"
+        )
         _non_block_pms.append(self._pm)
         if self._registry is not None:
             self._registry.append(self)
 
 
-def _cleanup_processes(script_config: ScriptConfig, pm: ProcessManager, force_script: bool = False) -> None:
+def _cleanup_processes(
+    script_config: ScriptConfig, pm: ProcessManager, force_script: bool = False
+) -> None:
     """清理脚本和游戏进程。
 
     通过 ProcessManager.kill() 精确终止已追踪的进程及其子进程树（基于 PID）。
@@ -571,16 +640,16 @@ def _cleanup_processes(script_config: ScriptConfig, pm: ProcessManager, force_sc
         force_script: 是否忽略用户配置，强制终止当前被管理的脚本进程。
     """
     if force_script or script_config.kill_script_after_done:
-        print_message(f'尝试关闭脚本进程 {pm.main_name} (pid={pm.main_pid})')
+        print_message(f"尝试关闭脚本进程 {pm.main_name} (pid={pm.main_pid})")
         try:
             pm.kill()
         except Exception:
-            log.error('通过 ProcessManager 关闭脚本进程失败', exc_info=True)
+            log.error("通过 ProcessManager 关闭脚本进程失败", exc_info=True)
 
     if script_config.kill_game_after_done:
         game_name = script_config.game_process_name
         if game_name:
-            print_message(f'尝试关闭游戏进程 {game_name}')
+            print_message(f"尝试关闭游戏进程 {game_name}")
             try:
                 proc = find_process_by_infos(build_process_infos(game_name))
                 if proc is not None:
@@ -591,14 +660,14 @@ def _cleanup_processes(script_config: ScriptConfig, pm: ProcessManager, force_sc
                         with suppress(Exception):
                             proc.kill()
             except Exception:
-                log.error('关闭游戏进程失败', exc_info=True)
+                log.error("关闭游戏进程失败", exc_info=True)
 
 
 def _run_external_script_with_retries(
     script_config: ScriptConfig,
     log_notifier: LogNotifier | None = None,
     ctx: ScriptChainerContext | None = None,
-    chain_label: str = '',
+    chain_label: str = "",
     non_block_procs: list[_ScriptRun] | None = None,
 ) -> None:
     """运行外部脚本。
@@ -618,20 +687,22 @@ def _run_external_script_with_retries(
             if log_notifier is not None:
                 log_notifier.flush()
             print_message(
-                f'重试运行脚本 ({retry_count}/{max_retries}) '
-                f'{script_config.script_display_name}',
-                level='INFO',
+                f"重试运行脚本 ({retry_count}/{max_retries}) "
+                f"{script_config.script_display_name}",
+                level="INFO",
             )
             if script_config.notify_start:
                 _push_chain_notification(
                     ctx,
                     chain_label,
-                    f'无日志超时重试 ({retry_count}/{max_retries})',
+                    f"无日志超时重试 ({retry_count}/{max_retries})",
                     script_config,
                 )
         try:
             run = (
-                _NonBlockScriptRun(script_config, log_notifier, registry=non_block_procs)
+                _NonBlockScriptRun(
+                    script_config, log_notifier, registry=non_block_procs
+                )
                 if non_block
                 else _ScriptRun(script_config, log_notifier)
             )
@@ -641,9 +712,9 @@ def _run_external_script_with_retries(
             if retry_count < max_retries:
                 continue
             print_message(
-                f'已达最大重试次数 ({max_retries})，放弃重启 '
-                f'{script_config.script_display_name}',
-                level='ERROR',
+                f"已达最大重试次数 ({max_retries})，放弃重启 "
+                f"{script_config.script_display_name}",
+                level="ERROR",
             )
             return
 
@@ -652,7 +723,7 @@ def _run_script_in_group(
     script_config: ScriptConfig,
     log_notifier: LogNotifier | None = None,
     ctx: ScriptChainerContext | None = None,
-    chain_label: str = '',
+    chain_label: str = "",
     non_block_procs: list[_ScriptRun] | None = None,
 ) -> None:
     """运行运行组中的单个脚本。
@@ -663,12 +734,16 @@ def _run_script_in_group(
     try:
         if script_config.script_type == ScriptType.PYTHON:
             if not script_config.block:
-                print_message(f'Python 脚本不支持非阻塞 按阻塞运行 {script_config.script_display_name}')
+                print_message(
+                    f"Python 脚本不支持非阻塞 按阻塞运行 {script_config.script_display_name}"
+                )
             _run_python_script(script_config, log_notifier)
         else:
-            _run_external_script_with_retries(script_config, log_notifier, ctx, chain_label, non_block_procs)
+            _run_external_script_with_retries(
+                script_config, log_notifier, ctx, chain_label, non_block_procs
+            )
     except Exception:
-        log.error('脚本执行异常', exc_info=True)
+        log.error("脚本执行异常", exc_info=True)
 
 
 def _run_python_script(
@@ -681,9 +756,11 @@ def _run_python_script(
     """
     invalid_msg = script_config.invalid_message
     if invalid_msg is not None:
-        print_message(f'Python 脚本配置不合法 跳过运行 {invalid_msg}')
+        print_message(f"Python 脚本配置不合法 跳过运行 {invalid_msg}")
         return
-    _exec_python_file(script_config.script_path, script_config.script_display_name, log_notifier)
+    _exec_python_file(
+        script_config.script_path, script_config.script_display_name, log_notifier
+    )
 
 
 def _exec_python_file(
@@ -705,17 +782,17 @@ def _exec_python_file(
         display_name = script_file.stem
 
     try:
-        code = script_file.read_text(encoding='utf-8')
+        code = script_file.read_text(encoding="utf-8")
     except Exception as e:
-        print_message(f'读取 Python 脚本失败 {display_name}: {e}', level='ERROR')
-        log.error('读取 Python 脚本失败', exc_info=True)
+        print_message(f"读取 Python 脚本失败 {display_name}: {e}", level="ERROR")
+        log.error("读取 Python 脚本失败", exc_info=True)
         return
 
     if not code or not code.strip():
-        print_message(f'Python 脚本为空 跳过 {display_name}')
+        print_message(f"Python 脚本为空 跳过 {display_name}")
         return
 
-    print_message(f'执行 Python 脚本 {display_name}...')
+    print_message(f"执行 Python 脚本 {display_name}...")
     old_argv = sys.argv[:]
     old_sys_path = sys.path[:]
     old_stdout = sys.stdout
@@ -732,32 +809,34 @@ def _exec_python_file(
             sys.stdout = _TeeWriter(old_stdout, log_notifier)
 
         exec_globals = {
-            '__name__': '__main__',
-            '__file__': script_path,
-            '__package__': None,
-            '__spec__': None,
-            '__builtins__': __builtins__,
+            "__name__": "__main__",
+            "__file__": script_path,
+            "__package__": None,
+            "__spec__": None,
+            "__builtins__": __builtins__,
         }
         # 只有当前进程内 exec 用户 Python 脚本时，控制台关闭才需要额外强退兜底。
         # Ctrl+C / Ctrl+Break 仍走 install_handlers() 注册的普通 signal 软退出链。
         with force_exit_on_console_close(
             lambda: _exit_controller.exit(_cleanup_active_pm, force=True)
         ):
-            exec(compile(code, script_path, 'exec'), exec_globals)
+            exec(compile(code, script_path, "exec"), exec_globals)
             if _exit_controller.is_shutdown_requested():
                 raise SystemExit(1)
-        print_message(f'Python 脚本执行完成 {display_name}', level='PASS')
+        print_message(f"Python 脚本执行完成 {display_name}", level="PASS")
     except SystemExit as e:
         if _exit_controller.is_shutdown_requested():
             raise
         if e.code in (0, None):
-            print_message(f'Python 脚本执行完成 {display_name}', level='PASS')
+            print_message(f"Python 脚本执行完成 {display_name}", level="PASS")
         else:
-            print_message(f'Python 脚本执行失败 {display_name}: exit={e.code}', level='ERROR')
-            log.error('Python 脚本通过 SystemExit 退出: %s', e.code)
+            print_message(
+                f"Python 脚本执行失败 {display_name}: exit={e.code}", level="ERROR"
+            )
+            log.error("Python 脚本通过 SystemExit 退出: %s", e.code)
     except Exception as e:
-        print_message(f'Python 脚本执行失败 {display_name}: {e}', level='ERROR')
-        log.error('Python 脚本执行失败', exc_info=True)
+        print_message(f"Python 脚本执行失败 {display_name}: {e}", level="ERROR")
+        log.error("Python 脚本执行失败", exc_info=True)
     finally:
         sys.stdout = old_stdout
         sys.argv = old_argv
@@ -786,7 +865,11 @@ def _wait_non_block_procs(non_block_procs: list[_ScriptRun]) -> None:
         run.wait_and_cleanup()
 
 
-def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_delay: int = 0, debug_index: int | None = None) -> None:
+def run_chain(
+    chain_config_path: str = "config/script_chain/88.yml",
+    shutdown_delay: int = 0,
+    debug_index: int | None = None,
+) -> None:
     """运行指定的脚本链。
 
     Args:
@@ -814,7 +897,7 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
 
     try:
         if not chain_config.is_file_exists:
-            print_message(f'脚本链配置不存在 {chain_config_path}', "ERROR")
+            print_message(f"脚本链配置不存在 {chain_config_path}", "ERROR")
         else:
             attach_targets = chain_config.compute_attach_targets()
             try:
@@ -824,11 +907,13 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
                     debug_index=debug_index,
                 )
             except ValueError as e:
-                print_message(str(e), 'ERROR')
+                print_message(str(e), "ERROR")
                 return
 
             if selection.debug_target is not None:
-                print_message(f'调试运行脚本链 {chain_label}: {selection.debug_target.script_display_name}')
+                print_message(
+                    f"调试运行脚本链 {chain_label}: {selection.debug_target.script_display_name}"
+                )
 
             runtime_groups, skipped_messages = resolve_runtime_groups(selection)
 
@@ -841,9 +926,10 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
                 log_notifier: LogNotifier | None = None
                 if ctx is not None and group.host.notify_log_interval > 0:
                     from script_chainer.services.log_notifier import LogNotifier
+
                     log_notifier = LogNotifier(
                         ctx=ctx,
-                        title=f'{ctx.notify_config.title} - {group.host.script_display_name} 日志',
+                        title=f"{ctx.notify_config.title} - {group.host.script_display_name} 日志",
                         interval=group.host.notify_log_interval,
                     )
                     log_notifier.start()
@@ -853,18 +939,24 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
                         _push_chain_notification(
                             ctx,
                             chain_label,
-                            '调试开始' if debug_index is not None else '开始运行',
+                            "调试开始" if debug_index is not None else "开始运行",
                             group.host,
                         )
 
                     for script_config in group.scripts:
-                        _run_script_in_group(script_config, log_notifier, ctx, chain_label, non_block_procs)
+                        _run_script_in_group(
+                            script_config,
+                            log_notifier,
+                            ctx,
+                            chain_label,
+                            non_block_procs,
+                        )
 
                     if ctx is not None and group.host.notify_done:
                         _push_chain_notification(
                             ctx,
                             chain_label,
-                            '调试结束' if debug_index is not None else '运行结束',
+                            "调试结束" if debug_index is not None else "运行结束",
                             group.host,
                         )
                 finally:
@@ -872,21 +964,23 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
                         log_notifier.stop()
 
                 if group_idx < len(runtime_groups) - 1:
-                    print_message('10秒后开始下一个脚本')
+                    print_message("10秒后开始下一个脚本")
                     if _exit_controller.wait(10):
                         break
 
-            print_message('已完成调试脚本' if debug_index is not None else '已完成全部脚本')
+            print_message(
+                "已完成调试脚本" if debug_index is not None else "已完成全部脚本"
+            )
 
             if non_block_procs:
-                print_message(f'等待 {len(non_block_procs)} 个非阻塞后台脚本完成')
+                print_message(f"等待 {len(non_block_procs)} 个非阻塞后台脚本完成")
                 _wait_non_block_procs(non_block_procs)
 
         if shutdown_delay > 0:
             cmd_utils.shutdown_sys(shutdown_delay)
-            print_message('准备关机')
+            print_message("准备关机")
 
-        print_message('5秒后关闭本窗口')
+        print_message("5秒后关闭本窗口")
         _exit_controller.wait(5)
     finally:
         # 清理资源
@@ -894,7 +988,7 @@ def run_chain(chain_config_path: str = 'config/script_chain/88.yml', shutdown_de
             try:
                 ctx.after_app_shutdown()
             except Exception as e:
-                log.error(f'清理资源失败: {e}')
+                log.error(f"清理资源失败: {e}")
 
 
 def run():
@@ -908,5 +1002,5 @@ def run():
     sys.exit(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run()

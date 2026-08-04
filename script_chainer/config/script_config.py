@@ -14,49 +14,65 @@ from script_chainer.utils.process_name_utils import (
 
 
 class CheckDoneMethods(Enum):
-
-    GAME_CLOSED = ConfigItem(label='游戏被关闭', value='game_closed', desc='游戏被关闭时 认为任务完成')
-    SCRIPT_CLOSED = ConfigItem(label='脚本被关闭', value='script_closed', desc='脚本被关闭时 认为任务完成')
-    GAME_OR_SCRIPT_CLOSED = ConfigItem(label='游戏或脚本被关闭', value='game_or_script_closed', desc='游戏或脚本被关闭时 认为任务完成')
+    GAME_CLOSED = ConfigItem(
+        label="游戏被关闭", value="game_closed", desc="游戏被关闭时 认为任务完成"
+    )
+    SCRIPT_CLOSED = ConfigItem(
+        label="脚本被关闭", value="script_closed", desc="脚本被关闭时 认为任务完成"
+    )
+    GAME_OR_SCRIPT_CLOSED = ConfigItem(
+        label="游戏或脚本被关闭",
+        value="game_or_script_closed",
+        desc="游戏或脚本被关闭时 认为任务完成",
+    )
 
 
 class ScriptLaunchMethod(Enum):
-
-    DIRECT = ConfigItem(label='直接启动', value=False, desc='将自动监控脚本路径对应的程序，无需填写脚本进程名称')
-    LAUNCHER = ConfigItem(label='启动器启动', value=True, desc='脚本路径是启动器，需要填写启动后实际运行的目标进程')
+    DIRECT = ConfigItem(
+        label="直接启动",
+        value=False,
+        desc="将自动监控脚本路径对应的程序，无需填写脚本进程名称",
+    )
+    LAUNCHER = ConfigItem(
+        label="启动器启动",
+        value=True,
+        desc="脚本路径是启动器，需要填写启动后实际运行的目标进程",
+    )
 
 
 class ScriptProcessName(Enum):
-
-    ONE_DRAGON_LAUNCHER = ConfigItem(label='一条龙', value=['python.exe', 'pythonw.exe'])
-    OK_SCRIPTS = ConfigItem(label='OK', value=['pythonw.exe'])
+    ONE_DRAGON_LAUNCHER = ConfigItem(
+        label="一条龙", value=["python.exe", "pythonw.exe"]
+    )
+    OK_SCRIPTS = ConfigItem(label="OK", value=["pythonw.exe"])
 
 
 class GameProcessName(Enum):
-
-    GENSHIN_IMPACT_CN = ConfigItem(label='原神', value='YuanShen.exe')
-    GENSHIN_IMPACT_GLOBAL = ConfigItem(label='原神・国际服', value='GenshinImpact.exe')
-    STAR_RAIL_CN = ConfigItem(label='崩坏：星穹铁道', value='StarRail.exe')
-    ZZZ_CN = ConfigItem(label='绝区零', value='ZenlessZoneZero.exe')
-    HONKAI_IMPACT_CN = ConfigItem(label='崩坏3', value='BH3.exe')
-    ENDFIELD = ConfigItem(label='终末地', value='Endfield.exe')
-    MUMU = ConfigItem(label='MUMU模拟器', value='MuMuNxDevice.exe')
-    WuWa = ConfigItem(label='鸣潮', value='Client-Win64-Shipping.exe')
-    NTE = ConfigItem(label='异环', value='HTGame.exe')
+    GENSHIN_IMPACT_CN = ConfigItem(label="原神", value="YuanShen.exe")
+    GENSHIN_IMPACT_GLOBAL = ConfigItem(label="原神・国际服", value="GenshinImpact.exe")
+    STAR_RAIL_CN = ConfigItem(label="崩坏：星穹铁道", value="StarRail.exe")
+    ZZZ_CN = ConfigItem(label="绝区零", value="ZenlessZoneZero.exe")
+    HONKAI_IMPACT_CN = ConfigItem(label="崩坏3", value="BH3.exe")
+    ENDFIELD = ConfigItem(label="终末地", value="Endfield.exe")
+    MUMU = ConfigItem(label="MUMU模拟器", value="MuMuNxDevice.exe")
+    WuWa = ConfigItem(label="鸣潮", value="Client-Win64-Shipping.exe")
+    NTE = ConfigItem(label="异环", value="HTGame.exe")
 
 
 class ScriptType:
-    EXTERNAL = 'external'
-    PYTHON = 'python'
+    EXTERNAL = "external"
+    PYTHON = "python"
 
 
 class AttachDirection:
-    NONE = ''
-    PRE = 'pre'
-    POST = 'post'
+    NONE = ""
+    PRE = "pre"
+    POST = "post"
 
 
-def _find_process_config_item(enum_cls: type[Enum], process_names: list[str]) -> ConfigItem | None:
+def _find_process_config_item(
+    enum_cls: type[Enum], process_names: list[str]
+) -> ConfigItem | None:
     normalized = normalize_process_names(process_names)
     for enum_item in enum_cls:
         if (
@@ -67,7 +83,9 @@ def _find_process_config_item(enum_cls: type[Enum], process_names: list[str]) ->
     return None
 
 
-def _migrate_legacy_script_process_names(process_names: str | list[str] | None) -> list[str]:
+def _migrate_legacy_script_process_names(
+    process_names: str | list[str] | None,
+) -> list[str]:
     normalized = normalize_process_names(process_names)
     if not normalized:
         return []
@@ -77,8 +95,10 @@ def _migrate_legacy_script_process_names(process_names: str | list[str] | None) 
         return normalize_process_names(matched.value)
 
     normalized_set = {name.lower() for name in normalized}
-    if normalized_set.issubset({'python.exe', 'pythonw.exe'}):
-        return normalize_process_names(ScriptProcessName.ONE_DRAGON_LAUNCHER.value.value)
+    if normalized_set.issubset({"python.exe", "pythonw.exe"}):
+        return normalize_process_names(
+            ScriptProcessName.ONE_DRAGON_LAUNCHER.value.value
+        )
 
     return normalized
 
@@ -86,21 +106,21 @@ def _migrate_legacy_script_process_names(process_names: str | list[str] | None) 
 def _normalize_game_process_name(process_name: object) -> str:
     if isinstance(process_name, str):
         return normalize_process_name(process_name)
-    return ''
+    return ""
 
 
 def _migrate_legacy_script_config_data(data: dict) -> dict:
     """将旧版脚本配置迁移到当前结构。"""
     normalized = dict(data)
-    normalized['script_process_name'] = _migrate_legacy_script_process_names(
-        normalized.get('script_process_name')
+    normalized["script_process_name"] = _migrate_legacy_script_process_names(
+        normalized.get("script_process_name")
     )
-    normalized['game_process_name'] = _normalize_game_process_name(
-        normalized.get('game_process_name', '')
+    normalized["game_process_name"] = _normalize_game_process_name(
+        normalized.get("game_process_name", "")
     )
-    normalized['launcher_mode'] = _infer_launcher_mode(
+    normalized["launcher_mode"] = _infer_launcher_mode(
         normalized,
-        normalized['script_process_name'],
+        normalized["script_process_name"],
     )
     return normalized
 
@@ -124,32 +144,33 @@ def _migrate_legacy_script_list(raw_script_list: object) -> tuple[list[dict], bo
 
 
 def _infer_launcher_mode(data: dict, script_process_names: list[str]) -> bool:
-    if 'launcher_mode' in data:
-        return data.get('launcher_mode') is True
+    if "launcher_mode" in data:
+        return data.get("launcher_mode") is True
 
-    script_path = str(data.get('script_path') or '').strip()
+    script_path = str(data.get("script_path") or "").strip()
     if not script_path or not script_process_names:
         return False
 
     launch_name = PureWindowsPath(script_path).name
-    return any(not process_name_equals(name, launch_name) for name in script_process_names)
+    return any(
+        not process_name_equals(name, launch_name) for name in script_process_names
+    )
 
 
 @dataclass
 class ScriptConfig:
-
-    display_name: str = ''
-    game_label: str = ''
+    display_name: str = ""
+    game_label: str = ""
     script_type: str = ScriptType.EXTERNAL
-    script_path: str = ''
+    script_path: str = ""
     script_process_name: list[str] = field(default_factory=list)
-    game_process_name: str = ''
+    game_process_name: str = ""
     launcher_mode: bool = False
     run_timeout_seconds: int = 3600
-    check_done: str = ''
+    check_done: str = ""
     kill_script_after_done: bool = True
     kill_game_after_done: bool = True
-    script_arguments: str = ''
+    script_arguments: str = ""
     notify_start: bool = True
     notify_done: bool = True
     notify_log_interval: int = 0
@@ -165,16 +186,16 @@ class ScriptConfig:
     def to_dict(self) -> dict:
         """序列化为字典（排除 idx）。"""
         d = asdict(self)
-        d.pop('idx', None)
+        d.pop("idx", None)
         return d
 
     @classmethod
-    def create_default(cls) -> 'ScriptConfig':
+    def create_default(cls) -> "ScriptConfig":
         """创建默认配置。"""
         return cls(check_done=CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value)
 
     @classmethod
-    def create_python_default(cls) -> 'ScriptConfig':
+    def create_python_default(cls) -> "ScriptConfig":
         """创建 Python 脚本类型的默认配置。"""
         return cls(
             script_type=ScriptType.PYTHON,
@@ -182,7 +203,7 @@ class ScriptConfig:
             notify_done=False,
         )
 
-    def copy(self) -> 'ScriptConfig':
+    def copy(self) -> "ScriptConfig":
         """深拷贝（保留 idx）。"""
         new = ScriptConfig(**self.to_dict())
         new.idx = self.idx
@@ -194,7 +215,7 @@ class ScriptConfig:
             return self.display_name
         if self.script_path:
             return Path(self.script_path).name
-        return '(未设置)'
+        return "(未设置)"
 
     @property
     def game_display_name(self) -> str:
@@ -208,19 +229,19 @@ class ScriptConfig:
             return config.label
         if self.game_process_name:
             return self.game_process_name
-        return '自定义游戏'
+        return "自定义游戏"
 
     @property
     def script_process_display_name(self) -> str:
         config = _find_process_config_item(ScriptProcessName, self.script_process_name)
         if config is not None:
             return config.label
-        return ' / '.join(normalize_process_names(self.script_process_name))
+        return " / ".join(normalize_process_names(self.script_process_name))
 
     @property
     def launch_program_name(self) -> str:
         if not self.script_path:
-            return ''
+            return ""
         return PureWindowsPath(self.script_path).name
 
     @property
@@ -234,7 +255,7 @@ class ScriptConfig:
             process_name_equals(item, launch_name)
             for item in normalize_process_names(self.script_process_name)
         ):
-            return f'启动后实际运行的程序不能包含启动程序本体 {launch_name}'
+            return f"启动后实际运行的程序不能包含启动程序本体 {launch_name}"
         return None
 
     @property
@@ -243,57 +264,57 @@ class ScriptConfig:
         if config is not None:
             return config.label
         else:
-            return ''
+            return ""
 
     @property
     def invalid_message(self) -> str | None:
         if self.script_type == ScriptType.PYTHON:
             if not self.script_path:
-                return 'Python 脚本路径为空'
+                return "Python 脚本路径为空"
             elif not Path(self.script_path).exists():
-                return f'Python 脚本不存在 {self.script_path}'
+                return f"Python 脚本不存在 {self.script_path}"
             return None
 
         if self.script_path is None or len(self.script_path) == 0:
-            return '脚本路径为空'
+            return "脚本路径为空"
         elif not Path(self.script_path).exists():
-            return f'脚本路径不存在 {self.script_path}'
+            return f"脚本路径不存在 {self.script_path}"
         elif get_config_item_from_enum(CheckDoneMethods, self.check_done) is None:
-            return f'检查完成方式非法 {self.check_done}'
+            return f"检查完成方式非法 {self.check_done}"
         elif (
-                (self.check_done == CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value
-                 or self.check_done == CheckDoneMethods.GAME_CLOSED.value.value
-                 or self.kill_game_after_done)
-              and len(normalize_process_name(self.game_process_name)) == 0
-        ):
-            return '游戏进程名称为空'
+            self.check_done == CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value
+            or self.check_done == CheckDoneMethods.GAME_CLOSED.value.value
+            or self.kill_game_after_done
+        ) and len(normalize_process_name(self.game_process_name)) == 0:
+            return "游戏进程名称为空"
         elif (
-                self.launcher_mode
-                and (self.check_done == CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value
-                     or self.check_done == CheckDoneMethods.SCRIPT_CLOSED.value.value
-                     or self.kill_script_after_done)
-                and len(normalize_process_names(self.script_process_name)) == 0
+            self.launcher_mode
+            and (
+                self.check_done == CheckDoneMethods.GAME_OR_SCRIPT_CLOSED.value.value
+                or self.check_done == CheckDoneMethods.SCRIPT_CLOSED.value.value
+                or self.kill_script_after_done
+            )
+            and len(normalize_process_names(self.script_process_name)) == 0
         ):
-            return '启动后实际运行的程序为空'
+            return "启动后实际运行的程序为空"
         elif self.launcher_mode_invalid_message is not None:
             return self.launcher_mode_invalid_message
         elif self.run_timeout_seconds <= 0:
-            return '运行超时时间必须大于0'
+            return "运行超时时间必须大于0"
 
 
 class ScriptChainConfig(YamlConfig):
-
-    _script_config_fields = {f.name for f in fields(ScriptConfig)} - {'idx'}
+    _script_config_fields = {f.name for f in fields(ScriptConfig)} - {"idx"}
 
     @classmethod
     def _load_script_config(cls, data: dict) -> ScriptConfig:
-        return ScriptConfig(**{
-            k: v
-            for k, v in data.items()
-            if k in cls._script_config_fields
-        })
+        return ScriptConfig(
+            **{k: v for k, v in data.items() if k in cls._script_config_fields}
+        )
 
-    def __init__(self, module_name: str = '', file_path: str | None = None, is_mock: bool = False):
+    def __init__(
+        self, module_name: str = "", file_path: str | None = None, is_mock: bool = False
+    ):
         if file_path is not None:
             # 直接以配置文件路径构造：绕过 module_name + sub_dir 的路径推导。
             YamlOperator.__init__(self, file_path)
@@ -302,16 +323,15 @@ class ScriptChainConfig(YamlConfig):
             YamlConfig.__init__(
                 self,
                 module_name,
-                sub_dir=['script_chain'],
-                is_mock=is_mock, sample=False, copy_from_sample=False,
+                sub_dir=["script_chain"],
+                is_mock=is_mock,
+                sample=False,
+                copy_from_sample=False,
             )
 
-        raw_script_list = self.get('script_list', [])
+        raw_script_list = self.get("script_list", [])
         migrated_script_list, migrated = _migrate_legacy_script_list(raw_script_list)
-        self.script_list = [
-            self._load_script_config(i)
-            for i in migrated_script_list
-        ]
+        self.script_list = [self._load_script_config(i) for i in migrated_script_list]
         for config in self.script_list:
             config.script_path = self._to_runtime_script_path(config.script_path)
         self.init_idx()
@@ -322,7 +342,7 @@ class ScriptChainConfig(YamlConfig):
         return Path(self.file_path).parent
 
     def _get_python_scripts_dir(self) -> Path:
-        d = self._get_script_chain_dir() / 'scripts'
+        d = self._get_script_chain_dir() / "scripts"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
@@ -340,32 +360,41 @@ class ScriptChainConfig(YamlConfig):
         if not path or self.file_path is None:
             return path
         try:
-            return Path(path).resolve().relative_to(
-                self._get_script_chain_dir().resolve()
-            ).as_posix()
+            return (
+                Path(path)
+                .resolve()
+                .relative_to(self._get_script_chain_dir().resolve())
+                .as_posix()
+            )
         except ValueError:
             return path
 
     def get_python_script_content(self, idx: int) -> str:
-        p = Path(self._to_runtime_script_path(self.script_list[idx].script_path)) if self.script_list[idx].script_path else None
+        p = (
+            Path(self._to_runtime_script_path(self.script_list[idx].script_path))
+            if self.script_list[idx].script_path
+            else None
+        )
         if p and p.exists():
-            return p.read_text(encoding='utf-8')
-        return ''
+            return p.read_text(encoding="utf-8")
+        return ""
 
     def save_python_script(self, idx: int, code: str) -> str:
         path = self._to_runtime_script_path(self.script_list[idx].script_path)
         if not path:
             num = self._next_python_script_number()
-            path = str(self._get_python_scripts_dir() / f'{self.module_name}_{num}.py')
+            path = str(self._get_python_scripts_dir() / f"{self.module_name}_{num}.py")
             self.script_list[idx].script_path = path
             self.save()
-        Path(path).write_text(code, encoding='utf-8')
+        Path(path).write_text(code, encoding="utf-8")
         return path
 
     def _is_managed_script(self, path: str) -> bool:
         """判断脚本文件是否在 scripts/ 管理目录内。"""
         try:
-            Path(self._to_runtime_script_path(path)).resolve().relative_to(self._get_python_scripts_dir().resolve())
+            Path(self._to_runtime_script_path(path)).resolve().relative_to(
+                self._get_python_scripts_dir().resolve()
+            )
             return True
         except ValueError:
             return False
@@ -373,12 +402,12 @@ class ScriptChainConfig(YamlConfig):
     def _next_python_script_number(self) -> int:
         """获取下一个可用的 Python 脚本编号（从目录中已有文件推算）。"""
         existing = set()
-        prefix = f'{self.module_name}_'
+        prefix = f"{self.module_name}_"
         scripts_dir = self._get_python_scripts_dir()
         for p in scripts_dir.iterdir():
-            if p.is_file() and p.name.startswith(prefix) and p.suffix == '.py':
+            if p.is_file() and p.name.startswith(prefix) and p.suffix == ".py":
                 with suppress(ValueError):
-                    existing.add(int(p.stem[len(prefix):]))
+                    existing.add(int(p.stem[len(prefix) :]))
         n = 0
         while n in existing:
             n += 1
@@ -389,9 +418,9 @@ class ScriptChainConfig(YamlConfig):
         self.script_list.append(new_config)
         self.init_idx()
         num = self._next_python_script_number()
-        p = self._get_python_scripts_dir() / f'{self.module_name}_{num}.py'
+        p = self._get_python_scripts_dir() / f"{self.module_name}_{num}.py"
         new_config.script_path = str(p)
-        p.write_text('# Python 脚本\n', encoding='utf-8')
+        p.write_text("# Python 脚本\n", encoding="utf-8")
         self.save()
         return new_config
 
@@ -418,10 +447,10 @@ class ScriptChainConfig(YamlConfig):
 
     def save(self):
         self.data = {
-            'script_list': [
+            "script_list": [
                 {
                     **i.to_dict(),
-                    'script_path': self._to_storage_script_path(i.script_path),
+                    "script_path": self._to_storage_script_path(i.script_path),
                 }
                 for i in self.script_list
             ]
@@ -495,10 +524,11 @@ class ScriptChainConfig(YamlConfig):
         cur = self.script_list[idx]
         prev = self.script_list[idx - 1]
         return (
-            (cur.script_type == ScriptType.PYTHON
-             and cur.attach_direction == AttachDirection.POST)
-            or (prev.script_type == ScriptType.PYTHON
-                and prev.attach_direction == AttachDirection.PRE)
+            cur.script_type == ScriptType.PYTHON
+            and cur.attach_direction == AttachDirection.POST
+        ) or (
+            prev.script_type == ScriptType.PYTHON
+            and prev.attach_direction == AttachDirection.PRE
         )
 
     def has_next_attached(self, idx: int) -> bool:
@@ -513,13 +543,14 @@ class ScriptChainConfig(YamlConfig):
         cur = self.script_list[idx]
         nxt = self.script_list[idx + 1]
         return (
-            (cur.script_type == ScriptType.PYTHON
-             and cur.attach_direction == AttachDirection.PRE)
-            or (nxt.script_type == ScriptType.PYTHON
-                and nxt.attach_direction == AttachDirection.POST)
+            cur.script_type == ScriptType.PYTHON
+            and cur.attach_direction == AttachDirection.PRE
+        ) or (
+            nxt.script_type == ScriptType.PYTHON
+            and nxt.attach_direction == AttachDirection.POST
         )
 
-    def compute_attach_targets(self) -> list['ScriptConfig | None']:
+    def compute_attach_targets(self) -> list["ScriptConfig | None"]:
         """预计算每个脚本的最终挂靠目标（O(n) 总时间）。
 
         Returns:
@@ -533,7 +564,10 @@ class ScriptChainConfig(YamlConfig):
         post_target: ScriptConfig | None = None
         for i in range(n):
             sc = self.script_list[i]
-            if sc.script_type == ScriptType.PYTHON and sc.attach_direction == AttachDirection.POST:
+            if (
+                sc.script_type == ScriptType.PYTHON
+                and sc.attach_direction == AttachDirection.POST
+            ):
                 targets[i] = post_target
             else:
                 post_target = sc
@@ -542,7 +576,10 @@ class ScriptChainConfig(YamlConfig):
         pre_target: ScriptConfig | None = None
         for i in range(n - 1, -1, -1):
             sc = self.script_list[i]
-            if sc.script_type == ScriptType.PYTHON and sc.attach_direction == AttachDirection.PRE:
+            if (
+                sc.script_type == ScriptType.PYTHON
+                and sc.attach_direction == AttachDirection.PRE
+            ):
                 targets[i] = pre_target
             else:
                 pre_target = sc

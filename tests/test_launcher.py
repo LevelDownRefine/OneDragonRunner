@@ -4,6 +4,7 @@ CI 通过该测试确保 launcher 内部逻辑可正常执行。run_chain 默认
 测试中以 mock 将其替换为即时返回，避免拖慢 CI；空脚本列表 / 禁用脚本确保不会真正
 拉起任何游戏或脚本进程。
 """
+
 import sys
 import tempfile
 import unittest
@@ -37,10 +38,14 @@ def _write_external_script(tmp_dir: Path, name: str, py_file: Path) -> str:
     """生成一个调用当前解释器执行 py_file 的外部脚本（Windows: .bat / 其他: .sh）。"""
     if sys.platform == "win32":
         p = tmp_dir / f"{name}.bat"
-        p.write_text(f'@echo off\r\n"{sys.executable}" "{py_file}"\r\n', encoding="utf-8")
+        p.write_text(
+            f'@echo off\r\n"{sys.executable}" "{py_file}"\r\n', encoding="utf-8"
+        )
     else:
         p = tmp_dir / f"{name}.sh"
-        p.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{py_file}"\n', encoding="utf-8")
+        p.write_text(
+            f'#!/bin/sh\nexec "{sys.executable}" "{py_file}"\n', encoding="utf-8"
+        )
         p.chmod(0o755)
     return str(p)
 
@@ -90,32 +95,46 @@ class TestAttachTargets(unittest.TestCase):
     """compute_attach_targets 对 attach_direction 的解析。"""
 
     def test_pre_attaches_to_next_non_pre(self):
-        path = _write_chain_scripts([
-            {"display_name": "gameA"},
-            {"display_name": "stubB", "script_type": "python", "attach_direction": "pre"},
-            {"display_name": "gameC"},
-        ])
+        path = _write_chain_scripts(
+            [
+                {"display_name": "gameA"},
+                {
+                    "display_name": "stubB",
+                    "script_type": "python",
+                    "attach_direction": "pre",
+                },
+                {"display_name": "gameC"},
+            ]
+        )
         cfg = ScriptChainConfig(file_path=path)
         targets = cfg.compute_attach_targets()
         names = [t.display_name if t else None for t in targets]
         self.assertEqual(names, [None, "gameC", None])
 
     def test_post_attaches_to_prev_non_post(self):
-        path = _write_chain_scripts([
-            {"display_name": "gameA"},
-            {"display_name": "stubB", "script_type": "python", "attach_direction": "post"},
-            {"display_name": "gameC"},
-        ])
+        path = _write_chain_scripts(
+            [
+                {"display_name": "gameA"},
+                {
+                    "display_name": "stubB",
+                    "script_type": "python",
+                    "attach_direction": "post",
+                },
+                {"display_name": "gameC"},
+            ]
+        )
         cfg = ScriptChainConfig(file_path=path)
         targets = cfg.compute_attach_targets()
         names = [t.display_name if t else None for t in targets]
         self.assertEqual(names, [None, "gameA", None])
 
     def test_no_attach_are_none(self):
-        path = _write_chain_scripts([
-            {"display_name": "gameA"},
-            {"display_name": "gameB"},
-        ])
+        path = _write_chain_scripts(
+            [
+                {"display_name": "gameA"},
+                {"display_name": "gameB"},
+            ]
+        )
         cfg = ScriptChainConfig(file_path=path)
         self.assertEqual(cfg.compute_attach_targets(), [None, None])
 
@@ -131,11 +150,17 @@ class TestRuntimeSelection(unittest.TestCase):
         self.assertIsNone(sel.debug_target)
 
     def test_debug_index_keeps_target_only(self):
-        path = _write_chain_scripts([
-            {"display_name": "gameA"},
-            {"display_name": "stubB", "script_type": "python", "attach_direction": "pre"},
-            {"display_name": "gameC"},
-        ])
+        path = _write_chain_scripts(
+            [
+                {"display_name": "gameA"},
+                {
+                    "display_name": "stubB",
+                    "script_type": "python",
+                    "attach_direction": "pre",
+                },
+                {"display_name": "gameC"},
+            ]
+        )
         cfg = ScriptChainConfig(file_path=path)
         targets = cfg.compute_attach_targets()
         sel = build_runtime_selection(cfg.script_list, targets, debug_index=0)
@@ -155,47 +180,70 @@ class TestResolveRuntimeGroups(unittest.TestCase):
     """resolve_runtime_groups 的 enabled 过滤 / 挂靠跳过 / 分组合并。"""
 
     def test_disabled_script_skipped(self):
-        path = _write_chain_scripts([
-            {"display_name": "gameA"},
-            {"display_name": "gameB", "enabled": False},
-        ])
+        path = _write_chain_scripts(
+            [
+                {"display_name": "gameA"},
+                {"display_name": "gameB", "enabled": False},
+            ]
+        )
         groups, skipped, _ = _resolve(path, None)
         self.assertEqual([g.host.display_name for g in groups], ["gameA"])
         self.assertIn("脚本已禁用 跳过 gameB", skipped)
 
     def test_attached_to_disabled_skipped(self):
-        path = _write_chain_scripts([
-            {"display_name": "gameA"},
-            {"display_name": "stubB", "script_type": "python", "attach_direction": "pre"},
-            {"display_name": "gameC", "enabled": False},
-        ])
+        path = _write_chain_scripts(
+            [
+                {"display_name": "gameA"},
+                {
+                    "display_name": "stubB",
+                    "script_type": "python",
+                    "attach_direction": "pre",
+                },
+                {"display_name": "gameC", "enabled": False},
+            ]
+        )
         groups, skipped, _ = _resolve(path, None)
         self.assertEqual([g.host.display_name for g in groups], ["gameA"])
         self.assertIn("被挂靠脚本已禁用 跳过 stubB", skipped)
 
     def test_consecutive_same_host_merged(self):
         # stubB 用 post 挂靠到前方的 gameA，二者应并入同一运行组。
-        path = _write_chain_scripts([
-            {"display_name": "gameA"},
-            {"display_name": "stubB", "script_type": "python", "attach_direction": "post"},
-            {"display_name": "gameC"},
-        ])
+        path = _write_chain_scripts(
+            [
+                {"display_name": "gameA"},
+                {
+                    "display_name": "stubB",
+                    "script_type": "python",
+                    "attach_direction": "post",
+                },
+                {"display_name": "gameC"},
+            ]
+        )
         cfg = ScriptChainConfig(file_path=path)
         targets = cfg.compute_attach_targets()
         sel = build_runtime_selection(cfg.script_list, targets, debug_index=0)
         groups, _ = resolve_runtime_groups(sel)
         self.assertEqual(len(groups), 1)
-        self.assertEqual([s.display_name for s in groups[0].scripts], ["gameA", "stubB"])
+        self.assertEqual(
+            [s.display_name for s in groups[0].scripts], ["gameA", "stubB"]
+        )
 
 
 class TestLauncherArgParsing(unittest.TestCase):
     """launcher.main 解析命令行参数并正确调用 run_chain。"""
 
     def test_main_passes_chain_path_and_debug_index(self):
-        with mock.patch("launcher.run_chain") as rc, \
-             mock.patch.object(sys, "exit") as exit:
-            sys.argv = ["launcher", "--chain", "config/script_chain/01.yml",
-                        "--debug-index", "2"]
+        with (
+            mock.patch("launcher.run_chain") as rc,
+            mock.patch.object(sys, "exit") as exit,
+        ):
+            sys.argv = [
+                "launcher",
+                "--chain",
+                "config/script_chain/01.yml",
+                "--debug-index",
+                "2",
+            ]
             main()
         rc.assert_called_once()
         kwargs = rc.call_args.kwargs
@@ -205,8 +253,7 @@ class TestLauncherArgParsing(unittest.TestCase):
         exit.assert_called_once_with(0)
 
     def test_main_defaults(self):
-        with mock.patch("launcher.run_chain") as rc, \
-             mock.patch.object(sys, "exit"):
+        with mock.patch("launcher.run_chain") as rc, mock.patch.object(sys, "exit"):
             sys.argv = ["launcher"]
             main()
         kwargs = rc.call_args.kwargs
@@ -215,8 +262,7 @@ class TestLauncherArgParsing(unittest.TestCase):
         self.assertEqual(kwargs["shutdown_delay"], 0)
 
     def test_shutdown_flag_const(self):
-        with mock.patch("launcher.run_chain") as rc, \
-             mock.patch.object(sys, "exit"):
+        with mock.patch("launcher.run_chain") as rc, mock.patch.object(sys, "exit"):
             sys.argv = ["launcher", "-s"]
             main()
         kwargs = rc.call_args.kwargs
@@ -224,8 +270,7 @@ class TestLauncherArgParsing(unittest.TestCase):
         self.assertIsNone(kwargs["debug_index"])
 
     def test_shutdown_flag_with_value(self):
-        with mock.patch("launcher.run_chain") as rc, \
-             mock.patch.object(sys, "exit"):
+        with mock.patch("launcher.run_chain") as rc, mock.patch.object(sys, "exit"):
             sys.argv = ["launcher", "--shutdown", "30"]
             main()
         kwargs = rc.call_args.kwargs
@@ -235,8 +280,10 @@ class TestLauncherArgParsing(unittest.TestCase):
         # --script 单文件模式：直接 exec .py，不经过脚本链编排，不调 run_chain。
         # 注意：不能 mock sys.exit，否则 sys.exit(0) 变空操作、执行会穿透到末尾的
         # run_chain(...)；这里让 sys.exit(0) 真正抛 SystemExit 以终止分支。
-        with mock.patch("launcher.run_chain") as rc, \
-             mock.patch("launcher._exec_python_file") as ef:
+        with (
+            mock.patch("launcher.run_chain") as rc,
+            mock.patch("launcher._exec_python_file") as ef,
+        ):
             sys.argv = ["launcher", "--script", "C:/fake/stub.py"]
             with self.assertRaises(SystemExit):
                 main()
@@ -253,15 +300,24 @@ class TestLauncherRunsThrough(unittest.TestCase):
     def test_empty_script_list_completes(self):
         cfg = _write_chain(self.tmp, {"script_list": []})
         # 跳过结尾 5 秒等待，加速 CI
-        with mock.patch.object(script_runner._exit_controller, "wait", return_value=False):
+        with mock.patch.object(
+            script_runner._exit_controller, "wait", return_value=False
+        ):
             run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
         # 抵达此处即说明主流程（加载、编排、打印完成）跑通，未抛异常
 
     def test_disabled_script_is_skipped_without_launch(self):
-        cfg = _write_chain(self.tmp, {"script_list": [
-            {"enabled": False, "display_name": "disabled-script"},
-        ]})
-        with mock.patch.object(script_runner._exit_controller, "wait", return_value=False):
+        cfg = _write_chain(
+            self.tmp,
+            {
+                "script_list": [
+                    {"enabled": False, "display_name": "disabled-script"},
+                ]
+            },
+        )
+        with mock.patch.object(
+            script_runner._exit_controller, "wait", return_value=False
+        ):
             run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
         # 禁用脚本在编排解析阶段被跳过，不会真正启动任何进程
 
@@ -271,39 +327,44 @@ class TestLauncherRunsThrough(unittest.TestCase):
         marker_bg = Path(self.tmp) / "bg.txt"
         block_py = Path(self.tmp) / "block_script.py"
         block_py.write_text(
-            "import time\ntime.sleep(0.2)\n"
-            f"open({str(marker_block)!r}, 'w').close()\n",
+            f"import time\ntime.sleep(0.2)\nopen({str(marker_block)!r}, 'w').close()\n",
             encoding="utf-8",
         )
         bg_py = Path(self.tmp) / "bg_script.py"
         bg_py.write_text(
-            "import time\ntime.sleep(0.3)\n"
-            f"open({str(marker_bg)!r}, 'w').close()\n",
+            f"import time\ntime.sleep(0.3)\nopen({str(marker_bg)!r}, 'w').close()\n",
             encoding="utf-8",
         )
         # 非阻塞仅支持外部脚本，故用平台脚本包一层调用当前解释器
         bg_external = _write_external_script(Path(self.tmp), "bg_script", bg_py)
-        cfg = _write_chain(self.tmp, {"script_list": [
+        cfg = _write_chain(
+            self.tmp,
             {
-                "display_name": "bg",
-                "script_path": bg_external,
-                "check_done": "script_closed",
-                "block": False,
-                "run_timeout_seconds": 30,
-                "kill_script_after_done": False,
-                "kill_game_after_done": False,
+                "script_list": [
+                    {
+                        "display_name": "bg",
+                        "script_path": bg_external,
+                        "check_done": "script_closed",
+                        "block": False,
+                        "run_timeout_seconds": 30,
+                        "kill_script_after_done": False,
+                        "kill_game_after_done": False,
+                    },
+                    {
+                        "display_name": "block",
+                        "script_type": "python",
+                        "script_path": str(block_py),
+                        "block": True,
+                        "run_timeout_seconds": 30,
+                        "kill_script_after_done": False,
+                        "kill_game_after_done": False,
+                    },
+                ]
             },
-            {
-                "display_name": "block",
-                "script_type": "python",
-                "script_path": str(block_py),
-                "block": True,
-                "run_timeout_seconds": 30,
-                "kill_script_after_done": False,
-                "kill_game_after_done": False,
-            },
-        ]})
-        with mock.patch.object(script_runner._exit_controller, "wait", return_value=False):
+        )
+        with mock.patch.object(
+            script_runner._exit_controller, "wait", return_value=False
+        ):
             run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
         # 非阻塞脚本在整链末尾被等待完成，故二者标记文件均应存在
         self.assertTrue(marker_bg.exists(), "非阻塞后台脚本应已运行")

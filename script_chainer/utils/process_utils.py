@@ -58,29 +58,31 @@ def launch_in_terminal(
     if wt_path is not None:
         wt_cmd = [wt_path]
         if title:
-            wt_cmd.extend(['--title', title])
+            wt_cmd.extend(["--title", title])
         if cwd:
-            wt_cmd.extend(['-d', cwd])
-        wt_cmd.append('--')
+            wt_cmd.extend(["-d", cwd])
+        wt_cmd.append("--")
         wt_cmd.extend(command)
         return subprocess.Popen(wt_cmd, cwd=cwd)
 
     # 回退：创建新控制台窗口
-    flags = subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0
+    flags = subprocess.CREATE_NEW_CONSOLE if sys.platform == "win32" else 0
     return subprocess.Popen(command, cwd=cwd, creationflags=flags)
 
 
 def _find_windows_terminal() -> str | None:
     """查找 Windows Terminal 可执行文件。"""
-    if sys.platform != 'win32':
+    if sys.platform != "win32":
         return None
 
     candidates = [
-        shutil.which('wt'),
-        shutil.which('wt.exe'),
+        shutil.which("wt"),
+        shutil.which("wt.exe"),
     ]
 
-    local_appdata = Path.home() / 'AppData' / 'Local' / 'Microsoft' / 'WindowsApps' / 'wt.exe'
+    local_appdata = (
+        Path.home() / "AppData" / "Local" / "Microsoft" / "WindowsApps" / "wt.exe"
+    )
     candidates.append(str(local_appdata))
 
     for candidate in candidates:

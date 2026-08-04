@@ -11,6 +11,7 @@ def get_console_encoding() -> str:
     """
     if sys.platform == "win32":
         import ctypes
+
         oem_cp = ctypes.windll.kernel32.GetOEMCP()
         return f"cp{oem_cp}"
     return locale.getpreferredencoding(False)

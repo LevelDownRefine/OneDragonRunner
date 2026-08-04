@@ -40,8 +40,8 @@ def get_resource_path(*sub_paths: str) -> str:
     work_path = os.path.join(get_work_dir(), *sub_paths)
     if os.path.exists(work_path):
         return work_path
-    if hasattr(sys, '_MEIPASS'):
-        mei_path = os.path.join(sys._MEIPASS, 'resources', *sub_paths)
+    if hasattr(sys, "_MEIPASS"):
+        mei_path = os.path.join(sys._MEIPASS, "resources", *sub_paths)
         if os.path.exists(mei_path):
             return mei_path
     return work_path
@@ -53,7 +53,7 @@ def run_in_exe() -> bool:
     当前是否在exe中运行
     :return:
     """
-    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+    return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 
 @lru_cache
@@ -123,16 +123,18 @@ def reveal_in_file_manager(path: str) -> None:
     :return:
     """
     target_path = os.path.abspath(path)
-    if os.name == 'nt':
+    if os.name == "nt":
         if os.path.isdir(target_path):
-            subprocess.Popen(['explorer.exe', target_path])
+            subprocess.Popen(["explorer.exe", target_path])
         else:
-            subprocess.Popen(['explorer.exe', f'/select,{target_path}'])
-    elif sys.platform == 'darwin':
-        subprocess.Popen(['open', '-R', target_path])
+            subprocess.Popen(["explorer.exe", f"/select,{target_path}"])
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", "-R", target_path])
     else:
-        directory = target_path if os.path.isdir(target_path) else os.path.dirname(target_path)
-        subprocess.Popen(['xdg-open', directory or '.'])
+        directory = (
+            target_path if os.path.isdir(target_path) else os.path.dirname(target_path)
+        )
+        subprocess.Popen(["xdg-open", directory or "."])
 
 
 def get_dt(utc_offset: int | None = None) -> str:
@@ -226,7 +228,7 @@ def clear_outdated_debug_files(days: int = 1):
     清理过期的调试临时文件
     :return:
     """
-    directory = get_path_under_work_dir('.debug')
+    directory = get_path_under_work_dir(".debug")
     now = datetime.datetime.now()
     cutoff = now - datetime.timedelta(days=days)
 

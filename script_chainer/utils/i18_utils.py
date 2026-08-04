@@ -5,7 +5,7 @@ from typing import Optional
 from script_chainer.utils import os_utils
 
 _gt = {}
-_default_lang = 'cn'
+_default_lang = "cn"
 
 
 def get_translations(model: str, lang: str):
@@ -15,8 +15,8 @@ def get_translations(model: str, lang: str):
     :param lang: 语言
     :return:
     """
-    translate_path = os_utils.get_resource_path('assets', 'text', 'output')
-    lang_dir = os.path.join(translate_path, lang, 'LC_MESSAGES', f'{model}.mo')
+    translate_path = os_utils.get_resource_path("assets", "text", "output")
+    lang_dir = os.path.join(translate_path, lang, "LC_MESSAGES", f"{model}.mo")
     # 未有对应的文本mo文件
     if not os.path.exists(lang_dir):
         return None
@@ -27,9 +27,9 @@ def get_translations(model: str, lang: str):
     return translation
 
 
-def gt(msg: str, model: str = 'game', lang: str = _default_lang) -> str:
+def gt(msg: str, model: str = "game", lang: str = _default_lang) -> str:
     if msg is None or len(msg) == 0:
-        return ''
+        return ""
     if lang is None:
         lang = _default_lang
     if model not in _gt:
@@ -41,7 +41,9 @@ def gt(msg: str, model: str = 'game', lang: str = _default_lang) -> str:
     return trans.gettext(msg) if trans is not None else msg
 
 
-def coalesce_gt(msg: Optional[str], default: str, model: str = 'game', lang: str = _default_lang) -> str:
+def coalesce_gt(
+    msg: Optional[str], default: str, model: str = "game", lang: str = _default_lang
+) -> str:
     """
     带有默认值的获取多语言
     :param msg: 原字符串

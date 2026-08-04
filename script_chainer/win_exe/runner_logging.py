@@ -10,16 +10,16 @@ from script_chainer.utils.log_utils import (
     get_log_file_path,
 )
 
-RUNNER_LOGGER_NAME = 'ScriptChainerRunner'
-RUNNER_LOG_FILE_NAME = 'script_chainer_runner.log'
-RUNNER_FRAMEWORK_LOG_FILE_NAME = 'script_chainer_framework.log'
+RUNNER_LOGGER_NAME = "ScriptChainerRunner"
+RUNNER_LOG_FILE_NAME = "script_chainer_runner.log"
+RUNNER_FRAMEWORK_LOG_FILE_NAME = "script_chainer_framework.log"
 log = logging.getLogger(RUNNER_LOGGER_NAME)
 
 
 def _get_runner_log_dir() -> Path | None:
     """获取 runner 日志目录。"""
-    if getattr(sys, 'frozen', False):
-        log_dir = Path(sys.executable).resolve().parent / '.log'
+    if getattr(sys, "frozen", False):
+        log_dir = Path(sys.executable).resolve().parent / ".log"
         log_dir.mkdir(parents=True, exist_ok=True)
         return log_dir
     return None
@@ -48,6 +48,6 @@ def configure_runner_runtime_logging() -> ProjectRuntimeLoggingContext:
         project_add_console_handler=False,
         framework_add_console_handler=False,
     )
-    log.info('runner log file: %s', context.project_log_file_path)
-    log.info('framework log file: %s', context.framework_log_file_path)
+    log.info("runner log file: %s", context.project_log_file_path)
+    log.info("framework log file: %s", context.framework_log_file_path)
     return context

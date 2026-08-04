@@ -34,7 +34,6 @@ def invalidate_cache(file_path: str | None) -> None:
 
 
 class YamlOperator:
-
     def __init__(self, file_path: str | None = None):
         """
         yml文件的操作器
@@ -68,7 +67,7 @@ class YamlOperator:
         try:
             self.data = read_cache_or_load(self.file_path)
         except Exception:
-            log.error(f'文件读取失败 将使用默认值 {self.file_path}', exc_info=True)
+            log.error(f"文件读取失败 将使用默认值 {self.file_path}", exc_info=True)
             return
 
         if self.data is None:
@@ -83,12 +82,14 @@ class YamlOperator:
         if parent_dir:
             os.makedirs(parent_dir, exist_ok=True)
 
-        if self._copy_on_write_source_path is not None and not os.path.exists(write_path):
+        if self._copy_on_write_source_path is not None and not os.path.exists(
+            write_path
+        ):
             try:
                 shutil.copyfile(self._copy_on_write_source_path, write_path)
             except FileNotFoundError:
                 log.error(
-                    f'复制配置文件失败 来源文件不存在 source={self._copy_on_write_source_path} write_path={write_path}'
+                    f"复制配置文件失败 来源文件不存在 source={self._copy_on_write_source_path} write_path={write_path}"
                 )
                 return False
 
@@ -97,8 +98,14 @@ class YamlOperator:
 
     def _get_write_path(self) -> str | None:
         if self._copy_on_write_source_path is None:
-            return self.file_path if self.file_path is not None else self._write_file_path
-        return self._write_file_path if self._write_file_path is not None else self.file_path
+            return (
+                self.file_path if self.file_path is not None else self._write_file_path
+            )
+        return (
+            self._write_file_path
+            if self._write_file_path is not None
+            else self.file_path
+        )
 
     def save(self):
         if not self._ensure_write_path_ready():
@@ -108,13 +115,13 @@ class YamlOperator:
         if write_path is None:
             return
 
-        with open(write_path, 'w', encoding='utf-8') as file:
+        with open(write_path, "w", encoding="utf-8") as file:
             yaml.dump(self.data, file, allow_unicode=True, sort_keys=False)
         invalidate_cache(write_path)
 
         if self.file_path != write_path:
             self.file_path = write_path
-            if hasattr(self, 'old_file_path'):
+            if hasattr(self, "old_file_path"):
                 self.old_file_path = write_path
 
     def save_diy(self, text: str):
@@ -136,7 +143,7 @@ class YamlOperator:
 
         if self.file_path != write_path:
             self.file_path = write_path
-            if hasattr(self, 'old_file_path'):
+            if hasattr(self, "old_file_path"):
                 self.old_file_path = write_path
 
     def get(self, prop: str, value=None):

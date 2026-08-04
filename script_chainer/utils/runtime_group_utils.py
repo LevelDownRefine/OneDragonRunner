@@ -39,7 +39,7 @@ def build_runtime_selection(
         )
 
     if debug_index < 0 or debug_index >= len(script_list):
-        raise ValueError(f'调试脚本下标越界: {debug_index}')
+        raise ValueError(f"调试脚本下标越界: {debug_index}")
 
     debug_target = script_list[debug_index]
     selected_indices = {debug_index}
@@ -77,10 +77,14 @@ def resolve_runtime_groups(
     for i, script_config in enumerate(selection.script_list):
         attach_target = selection.attach_targets[i]
         if not selection.is_enabled(script_config):
-            skipped_messages.append(f'脚本已禁用 跳过 {script_config.script_display_name}')
+            skipped_messages.append(
+                f"脚本已禁用 跳过 {script_config.script_display_name}"
+            )
             continue
         if attach_target is not None and not selection.is_enabled(attach_target):
-            skipped_messages.append(f'被挂靠脚本已禁用 跳过 {script_config.script_display_name}')
+            skipped_messages.append(
+                f"被挂靠脚本已禁用 跳过 {script_config.script_display_name}"
+            )
             continue
 
         host = attach_target if attach_target is not None else script_config

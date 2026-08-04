@@ -6,16 +6,16 @@ from script_chainer.utils import os_utils
 
 
 class YamlConfig(YamlOperator):
-
     def __init__(
-            self,
-            module_name: str,
-            backup_module_name: str | None = None,
-            instance_idx: int | None = None,
-            sub_dir: list[str] | None = None,
-            sample: bool = False, copy_from_sample: bool = False,
-            read_sample_only: bool = False,
-            is_mock: bool = False
+        self,
+        module_name: str,
+        backup_module_name: str | None = None,
+        instance_idx: int | None = None,
+        sub_dir: list[str] | None = None,
+        sample: bool = False,
+        copy_from_sample: bool = False,
+        read_sample_only: bool = False,
+        is_mock: bool = False,
     ):
         self.instance_idx: int | None = instance_idx
         """传入时 该配置为一个的脚本实例独有的配置"""
@@ -41,7 +41,9 @@ class YamlConfig(YamlOperator):
         self._read_sample_only: bool = read_sample_only
         """是否只读取sample文件（即使.yml文件存在也只读sample）"""
 
-        file_path, write_file_path, copy_on_write_source_path = self._get_yaml_file_paths()
+        file_path, write_file_path, copy_on_write_source_path = (
+            self._get_yaml_file_paths()
+        )
         YamlOperator.__init__(self, file_path)
         self._write_file_path = write_file_path
         self._copy_on_write_source_path = copy_on_write_source_path
@@ -53,16 +55,16 @@ class YamlConfig(YamlOperator):
         """
         if self.is_mock:
             return None, None, None
-        sub_dir = ['config']
+        sub_dir = ["config"]
         if self.instance_idx is not None:
-            sub_dir.append('%02d' % self.instance_idx)
+            sub_dir.append("%02d" % self.instance_idx)
         if self.sub_dir is not None:
             sub_dir = sub_dir + self.sub_dir
 
         dir_path = os_utils.get_path_under_work_dir(*sub_dir)
 
-        yml_path = os.path.join(dir_path, f'{self.module_name}.yml')
-        sample_yml_path = os.path.join(dir_path, f'{self.module_name}.sample.yml')
+        yml_path = os.path.join(dir_path, f"{self.module_name}.yml")
+        sample_yml_path = os.path.join(dir_path, f"{self.module_name}.sample.yml")
 
         # 只读sample文件模式
         if self._read_sample_only and os.path.exists(sample_yml_path):
@@ -74,7 +76,7 @@ class YamlConfig(YamlOperator):
 
         # 备用文件存在时 复制使用
         if self.backup_module_name is not None:
-            backup_yml_path = os.path.join(dir_path, f'{self.backup_module_name}.yml')
+            backup_yml_path = os.path.join(dir_path, f"{self.backup_module_name}.yml")
             if os.path.exists(backup_yml_path):
                 shutil.copyfile(backup_yml_path, yml_path)
                 return yml_path, yml_path, None
@@ -87,14 +89,16 @@ class YamlConfig(YamlOperator):
             return sample_yml_path, yml_path, sample_yml_path
 
         # 冻结环境回退到 MEIPASS/resources
-        frozen_path = os_utils.get_resource_path(*sub_dir, f'{self.module_name}.yml')
+        frozen_path = os_utils.get_resource_path(*sub_dir, f"{self.module_name}.yml")
         if os.path.exists(frozen_path):
             return frozen_path, yml_path, frozen_path
 
         return yml_path, yml_path, None
 
     def _get_yaml_file_path(self) -> str | None:
-        file_path, write_file_path, copy_on_write_source_path = self._get_yaml_file_paths()
+        file_path, write_file_path, copy_on_write_source_path = (
+            self._get_yaml_file_paths()
+        )
         self._write_file_path = write_file_path
         self._copy_on_write_source_path = copy_on_write_source_path
         return file_path
@@ -107,11 +111,14 @@ class YamlConfig(YamlOperator):
         """
         if self.file_path is None:
             return False
-        return self.file_path.endswith('.sample.yml')
+        return self.file_path.endswith(".sample.yml")
 
-    def get_prop_adapter(self, prop: str,
-                         getter_convert: str | None = None,
-                         setter_convert: str | None = None):
+    def get_prop_adapter(
+        self,
+        prop: str,
+        getter_convert: str | None = None,
+        setter_convert: str | None = None,
+    ):
         """
         获取一个配置适配器
         :param prop: 配置字段
@@ -122,9 +129,10 @@ class YamlConfig(YamlOperator):
         from one_dragon_qt.widgets.setting_card.yaml_config_adapter import (
             YamlConfigAdapter,
         )
+
         return YamlConfigAdapter(
             config=self,
             field=prop,
             getter_convert=getter_convert,
-            setter_convert=setter_convert
+            setter_convert=setter_convert,
         )

@@ -5,7 +5,6 @@ from script_chainer.utils.i18_utils import gt
 
 
 class ConfigItem:
-
     def __init__(self, label: str, value: Any = None, desc: Optional[str] = None):
         """
         选项值
@@ -14,7 +13,7 @@ class ConfigItem:
         """
         self.label: str = label  # 显示文本
         self.value: Any = label if value is None else value  # 值
-        self.desc: str = desc if desc is not None else ''  # 选项解释
+        self.desc: str = desc if desc is not None else ""  # 选项解释
 
     @property
     def ui_text(self) -> str:
@@ -22,7 +21,7 @@ class ConfigItem:
         显示的文本
         :return:
         """
-        return gt(self.label, 'ui')
+        return gt(self.label, "ui")
 
 
 def get_config_item_from_enum(enum: Iterable[Enum], value: Any) -> Optional[ConfigItem]:

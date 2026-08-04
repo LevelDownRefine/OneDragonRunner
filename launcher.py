@@ -8,6 +8,7 @@
 但省去了 GUI 编辑器与 ``ExeLauncher`` 依赖，直接调用
 ``script_chainer.win_exe.script_runner.run_chain``。
 """
+
 from __future__ import annotations
 
 import argparse

@@ -69,7 +69,7 @@ class LauncherExitError(Exception):
 
     def __init__(self, returncode: int):
         self.returncode = returncode
-        super().__init__(f'启动器异常退出 (rc={returncode})')
+        super().__init__(f"启动器异常退出 (rc={returncode})")
 
 
 @dataclass
@@ -121,7 +121,9 @@ def match_process(proc: psutil.Process, target: ProcessInfo) -> bool:
     try:
         if target.pid is not None and proc.pid != target.pid:
             return False
-        if target.name is not None and not process_name_equals(proc.name(), target.name):
+        if target.name is not None and not process_name_equals(
+            proc.name(), target.name
+        ):
             return False
         if target.exe is not None:
             try:
@@ -145,7 +147,7 @@ def find_process_by_infos(
         return None
 
     excluded = exclude_pids or set()
-    for proc in psutil.process_iter(['pid', 'name']):
+    for proc in psutil.process_iter(["pid", "name"]):
         try:
             if proc.pid in excluded:
                 continue
@@ -163,7 +165,7 @@ def collect_matching_process_pids(targets: list[ProcessInfo]) -> set[int]:
     if not targets:
         return matched
 
-    for proc in psutil.process_iter(['pid', 'name']):
+    for proc in psutil.process_iter(["pid", "name"]):
         try:
             for target in targets:
                 if match_process(proc, target):
@@ -267,7 +269,7 @@ class ProcessManager:
 
         if cwd is None:
             parent = Path(program).parent
-            cwd = str(parent) if parent != Path('.') else None
+            cwd = str(parent) if parent != Path(".") else None
 
         popen_kwargs: dict = {
             "cwd": cwd,
@@ -359,7 +361,9 @@ class ProcessManager:
         try:
             parent = psutil.Process(self.process.pid)
             for child in parent.children(recursive=True):
-                with suppress(psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                with suppress(
+                    psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess
+                ):
                     for target in targets:
                         if match_process(child, target):
                             return child
@@ -487,13 +491,16 @@ class ProcessManager:
 
         # 定义 Win32 API 签名，确保 64 位 HANDLE 不被截断
         kernel32.CreateJobObjectW.argtypes = [
-            ctypes.wintypes.LPVOID, ctypes.wintypes.LPCWSTR,
+            ctypes.wintypes.LPVOID,
+            ctypes.wintypes.LPCWSTR,
         ]
         kernel32.CreateJobObjectW.restype = ctypes.wintypes.HANDLE
 
         kernel32.SetInformationJobObject.argtypes = [
-            ctypes.wintypes.HANDLE, ctypes.c_int,
-            ctypes.wintypes.LPVOID, ctypes.wintypes.DWORD,
+            ctypes.wintypes.HANDLE,
+            ctypes.c_int,
+            ctypes.wintypes.LPVOID,
+            ctypes.wintypes.DWORD,
         ]
         kernel32.SetInformationJobObject.restype = ctypes.wintypes.BOOL
 
@@ -501,7 +508,8 @@ class ProcessManager:
         kernel32.CloseHandle.restype = ctypes.wintypes.BOOL
 
         kernel32.AssignProcessToJobObject.argtypes = [
-            ctypes.wintypes.HANDLE, ctypes.wintypes.HANDLE,
+            ctypes.wintypes.HANDLE,
+            ctypes.wintypes.HANDLE,
         ]
         kernel32.AssignProcessToJobObject.restype = ctypes.wintypes.BOOL
 
@@ -515,7 +523,10 @@ class ProcessManager:
         info.BasicLimitInformation.LimitFlags = 0x2000 | 0x0800
 
         if not kernel32.SetInformationJobObject(
-            job, 9, ctypes.byref(info), ctypes.sizeof(info),
+            job,
+            9,
+            ctypes.byref(info),
+            ctypes.sizeof(info),
         ):
             kernel32.CloseHandle(job)
             return None
@@ -591,7 +602,6 @@ class ProcessManager:
                 returncode=result.returncode,
             )
         except subprocess.TimeoutExpired:
-            return ProcessResult(stdout='', stderr='执行超时', returncode=-1)
+            return ProcessResult(stdout="", stderr="执行超时", returncode=-1)
         except Exception as e:
-            return ProcessResult(stdout='', stderr=str(e), returncode=-1)
-
+            return ProcessResult(stdout="", stderr=str(e), returncode=-1)

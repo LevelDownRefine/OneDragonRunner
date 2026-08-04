@@ -33,7 +33,7 @@ def register_console_close_handler(on_close: Callable[[], None]) -> object | Non
     Returns:
         注册成功时返回需要由调用方持有引用的 handler；失败或非 Windows 下返回 None。
     """
-    if sys.platform != 'win32':
+    if sys.platform != "win32":
         return None
 
     import ctypes
@@ -59,7 +59,7 @@ def register_console_close_handler(on_close: Callable[[], None]) -> object | Non
 
 def unregister_console_close_handler(handler: object | None) -> None:
     """注销已注册的 Windows 控制台关闭事件处理器。"""
-    if sys.platform != 'win32' or handler is None:
+    if sys.platform != "win32" or handler is None:
         return
 
     import ctypes
