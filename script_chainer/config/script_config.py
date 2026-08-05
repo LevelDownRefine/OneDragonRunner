@@ -341,19 +341,30 @@ class ScriptChainConfig(YamlConfig):
     def _get_script_chain_dir(self) -> Path:
         return Path(self.file_path).parent
 
+    def _project_root_dir(self) -> Path:
+        # 脚本链配置恒在 <项目根>/config/script_chain/，上溯两级即项目根；
+        # 作为相对 script_path 的回退基准（解析内置脚本如 scripts/shutdown.bat）。
+        return self._get_script_chain_dir().resolve().parent.parent
+
     def _get_python_scripts_dir(self) -> Path:
         d = self._get_script_chain_dir() / "scripts"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
     def _to_runtime_script_path(self, path: str) -> str:
-        """配置里的相对路径按脚本链目录解析，绝对路径原样使用。"""
+        """相对 script_path 优先按脚本链目录解析（保用户脚本），不存在再回退项目根
+        （救内置脚本，如 scripts/shutdown.bat）；绝对路径原样返回。与 GUI 侧
+        subscript.resolve_script_path / get_script_path 保持一致。
+        """
         if not path:
             return path
         p = Path(path)
         if p.is_absolute() or self.file_path is None:
             return str(p)
-        return str((self._get_script_chain_dir() / p).resolve())
+        chain_resolved = (self._get_script_chain_dir() / p).resolve()
+        if chain_resolved.exists():
+            return str(chain_resolved)
+        return str((self._project_root_dir() / p).resolve())
 
     def _to_storage_script_path(self, path: str) -> str:
         """保存时把脚本链目录内的路径写成相对路径，外部路径保持不变。"""
