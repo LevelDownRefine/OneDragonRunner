@@ -72,7 +72,9 @@ def _write_syntax_error_script(tmp_dir: Path) -> str:
     return str(p)
 
 
-def _write_sleep_script(tmp_dir: Path, seconds: int, pid_file: Path | None = None) -> str:
+def _write_sleep_script(
+    tmp_dir: Path, seconds: int, pid_file: Path | None = None
+) -> str:
     """写一个睡眠 seconds 秒的 .py 脚本，可选记录自身 PID 到 pid_file。"""
     p = tmp_dir / f"sleep_{seconds}s.py"
     lines = ["import os", "import time"]
@@ -339,9 +341,7 @@ class TestBlockingChainResilience(unittest.TestCase):
             self._run_and_check(
                 [
                     _make_external_python(crash_py),
-                    _make_blocking_python(
-                        _write_marker_script(self.tmp_path, marker)
-                    ),
+                    _make_blocking_python(_write_marker_script(self.tmp_path, marker)),
                 ],
                 [marker],
             )
@@ -421,9 +421,7 @@ class TestBlockingChainResilience(unittest.TestCase):
         elapsed = time.time() - start
 
         self.assertTrue(marker.exists(), "超时脚本后的 marker 应已执行")
-        self.assertLess(
-            elapsed, 15, f"整链应因超时而快速结束，实际耗时 {elapsed:.1f}s"
-        )
+        self.assertLess(elapsed, 15, f"整链应因超时而快速结束，实际耗时 {elapsed:.1f}s")
 
     def test_external_timeout_then_external_ok(self):
         """链: [外部 sleep(30) 且 run_timeout=2, 外部 marker] → marker 应存在。"""
@@ -446,9 +444,7 @@ class TestBlockingChainResilience(unittest.TestCase):
         elapsed = time.time() - start
 
         self.assertTrue(marker.exists(), "超时脚本后的外部 marker 应已执行")
-        self.assertLess(
-            elapsed, 15, f"整链应因超时而快速结束，实际耗时 {elapsed:.1f}s"
-        )
+        self.assertLess(elapsed, 15, f"整链应因超时而快速结束，实际耗时 {elapsed:.1f}s")
 
     def test_external_timeout_process_is_killed(self):
         """超时脚本在 kill_script_after_done=True 时应被清理，不留孤儿进程。
