@@ -1,6 +1,6 @@
 # OneDragonRunner
 
-脚本链运行器，从 [OneDragon-ScriptChainer](https://github.com/OneDragon-Anything/OneDragon-ScriptChainer) 移植而来，作为独立仓库维护（仅保留不含 `opencv`/`pynput` 的纯编排部分）。
+脚本链运行器，从 [OneDragon-ScriptChainer](https://github.com/OneDragon-Anything/OneDragon-ScriptChainer) 移植而来，作为独立仓库维护（仅保留不含 `opencv`/`pynput` 的纯编排部分）。脚本编排思路同时参考了 [AUTO-MAS](https://gitcode.com/gh_mirrors/au/AUTO-MAS) 的多脚本统一管理设计。
 
 ## 运行
 
