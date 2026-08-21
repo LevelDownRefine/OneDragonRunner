@@ -93,7 +93,7 @@ def shutdown_sys(seconds: int):
     """
     关机：先弹倒计时确认窗，确认才关机；关窗/取消/超时则不关。
     :param seconds: 倒计时秒数
-    :return:
+    :return: 无返回值，确认则关机，否则仅记录日志
     """
     if sys.platform != "win32":
         log.warning("非 Windows 平台不支持关机确认窗，跳过关机")
@@ -106,9 +106,10 @@ def shutdown_sys(seconds: int):
 
 
 def _run_shutdown_confirm(countdown: int) -> bool:
-    """拉起独立确认窗子进程，确认返回 True、取消/超时返回 False。
-
-    使用 CREATE_NO_WINDOW 复刻脚本项弹窗的成功条件（同 process_manager 拉起脚本项）。
+    """
+    拉起独立确认窗子进程，确认返回 True、取消/超时返回 False。
+    :param countdown: 倒计时秒数
+    :return: 确认返回 True，取消/超时返回 False
     """
     confirm_script = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "win_exe", "shutdown_confirm.py"

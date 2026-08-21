@@ -9,6 +9,11 @@ import tkinter as tk
 
 
 def main(countdown: int) -> int:
+    """
+    弹出倒计时确认窗并等待用户选择。
+    :param countdown: 倒计时秒数，归零时自动确认关机
+    :return: 0 表示确认关机，1 表示取消
+    """
     print(f"Tk 初始化中 TkVersion={tk.TkVersion}", flush=True)
     try:
         root = tk.Tk()
