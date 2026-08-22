@@ -7,6 +7,10 @@ from typing import Callable, List, Optional
 from script_chainer.utils import os_utils
 from script_chainer.utils.log_utils import log
 
+# CREATE_NO_WINDOW 仅在 Windows 平台存在；非 Windows 用 0 表示无特殊创建标志，
+# 保证同一份代码在 Linux/macOS CI 上也能正常执行（不创建隐藏窗口）。
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 def run_command(
     commands: List[str],
@@ -32,8 +36,8 @@ def run_command(
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
-        # 为子进程指定不创建新窗口的标志
-        creationflags = subprocess.CREATE_NO_WINDOW
+        # 为子进程指定不创建新窗口的标志（非 Windows 上为 0）
+        creationflags = _CREATE_NO_WINDOW
 
         process = subprocess.Popen(
             commands,
@@ -120,7 +124,7 @@ def _run_shutdown_confirm(countdown: int) -> bool:
     try:
         proc = subprocess.run(
             [sys.executable, confirm_script, str(countdown)],
-            creationflags=subprocess.CREATE_NO_WINDOW,
+            creationflags=_CREATE_NO_WINDOW,
             capture_output=True,
             text=True,
             timeout=countdown + 30,
