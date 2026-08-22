@@ -269,7 +269,6 @@ def _launch_script(
             program=script_path,
             args=args_list,
             target_process=target_process_infos,
-            search_timeout=30,
             stdout_callback=_make_stdout_callback(display_name, log_notifier, state),
         )
     except LauncherExitError as e:
