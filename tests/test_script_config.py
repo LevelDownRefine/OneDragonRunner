@@ -17,12 +17,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
-
 # 让 script_chainer 顶层包（src/runner）加入导入路径
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from conftest import dump_yaml as _dump_yaml  # noqa: E402
 
 from script_chainer.config.script_config import ScriptChainConfig  # noqa: E402
 
@@ -45,7 +45,7 @@ def _write_chain(root: Path, script_path: str, name: str = "88") -> str:
         ]
     }
     p = chain_dir / f"{name}.yml"
-    p.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    p.write_text(_dump_yaml(data), encoding="utf-8")
     return str(p)
 
 

@@ -22,12 +22,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import yaml
-
 # 让仓库根（script_chainer 顶层包）加入导入路径
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from conftest import dump_yaml as _dump_yaml  # noqa: E402
 
 from script_chainer.win_exe import script_runner  # noqa: E402
 from script_chainer.win_exe.script_runner import run_chain  # noqa: E402
@@ -111,7 +111,7 @@ def _write_chain_config(tmp_dir: str, scripts: list[dict]) -> str:
     """写脚本链 YAML 配置文件，返回路径。"""
     p = Path(tmp_dir) / "chain.yml"
     data = {"script_list": scripts}
-    p.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    p.write_text(_dump_yaml(data), encoding="utf-8")
     return str(p)
 
 

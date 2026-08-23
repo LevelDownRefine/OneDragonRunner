@@ -2,10 +2,9 @@ import copy
 import os
 import shutil
 
-import yaml
-
 from script_chainer.utils import yaml_utils
 from script_chainer.utils.log_utils import log
+from script_chainer.utils.yaml_utils import _yaml
 
 cached_yaml_data: dict[str, tuple[float, dict | list]] = {}
 
@@ -116,7 +115,7 @@ class YamlOperator:
             return
 
         with open(write_path, "w", encoding="utf-8") as file:
-            yaml.dump(self.data, file, allow_unicode=True, sort_keys=False)
+            _yaml.dump(self.data, file)
         invalidate_cache(write_path)
 
         if self.file_path != write_path:
