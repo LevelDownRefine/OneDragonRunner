@@ -17,8 +17,6 @@ from typing import TYPE_CHECKING, TextIO
 
 from colorama import Fore, Style, init
 
-from script_chainer.utils import cmd_utils
-
 if TYPE_CHECKING:
     # 通知/上下文在移植时被有意移除（运行器不再推送），仅保留类型以供静态检查。
     from script_chainer.context import ScriptChainerContext
@@ -866,16 +864,16 @@ def _wait_non_block_procs(non_block_procs: list[_ScriptRun]) -> None:
 
 def run_chain(
     chain_config_path: str = "config/script_chain/88.yml",
-    shutdown_delay: int = 0,
     debug_index: int | None = None,
 ) -> None:
     """运行指定的脚本链。
 
     Args:
         chain_config_path: 脚本链配置文件路径（.yml）。
-        shutdown_delay: 运行后关机延迟秒数，0 表示不关机。
         debug_index: 调试脚本下标，None 表示运行整个脚本链，非负整数表示仅调试该下标脚本，
             并按编排/挂靠关系一并纳入与其关联的脚本。
+
+    静音与关机由调用侧装饰器注入，本函数不含横切逻辑。
     """
     _exit_controller.reset()
     configure_runner_runtime_logging()
@@ -975,10 +973,6 @@ def run_chain(
                 print_message(f"等待 {len(non_block_procs)} 个非阻塞后台脚本完成")
                 _wait_non_block_procs(non_block_procs)
 
-        if shutdown_delay > 0:
-            cmd_utils.shutdown_sys(shutdown_delay)
-            print_message("准备关机")
-
         print_message("5秒后关闭本窗口")
         _exit_controller.wait(5)
     finally:
@@ -995,7 +989,6 @@ def run():
     args = parse_args()
     run_chain(
         chain_config_path=args.chain,
-        shutdown_delay=args.shutdown if args.shutdown else 0,
         debug_index=args.debug_index,
     )
     sys.exit(0)

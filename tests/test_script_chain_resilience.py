@@ -214,7 +214,7 @@ class TestBlockingChainResilience(unittest.TestCase):
     def _run_and_check(self, scripts: list[dict], expected_markers: list[Path]) -> None:
         """运行链配置并断言所有 marker 均存在。"""
         cfg = _write_chain_config(self.tmp, scripts)
-        run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
+        run_chain(chain_config_path=cfg, debug_index=None)
         for m in expected_markers:
             self.assertTrue(
                 m.exists(),
@@ -292,7 +292,7 @@ class TestBlockingChainResilience(unittest.TestCase):
             self.tmp,
             [_make_blocking_python(p) for p in fails],
         )
-        run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
+        run_chain(chain_config_path=cfg, debug_index=None)
         # 抵达此处即说明未抛异常
 
     def test_first_and_last_fail_middle_ok(self):
@@ -417,7 +417,7 @@ class TestBlockingChainResilience(unittest.TestCase):
             ],
         )
         start = time.time()
-        run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
+        run_chain(chain_config_path=cfg, debug_index=None)
         elapsed = time.time() - start
 
         self.assertTrue(marker.exists(), "超时脚本后的 marker 应已执行")
@@ -440,7 +440,7 @@ class TestBlockingChainResilience(unittest.TestCase):
             ],
         )
         start = time.time()
-        run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
+        run_chain(chain_config_path=cfg, debug_index=None)
         elapsed = time.time() - start
 
         self.assertTrue(marker.exists(), "超时脚本后的外部 marker 应已执行")
@@ -465,7 +465,7 @@ class TestBlockingChainResilience(unittest.TestCase):
                 _make_blocking_python(_write_marker_script(self.tmp_path, marker)),
             ],
         )
-        run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
+        run_chain(chain_config_path=cfg, debug_index=None)
 
         self.assertTrue(marker.exists(), "超时脚本后的 marker 应已执行")
         self.assertTrue(pid_file.exists(), "sleep 脚本应已记录自身 PID")

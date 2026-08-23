@@ -20,6 +20,12 @@ from conftest import dump_yaml as _dump_yaml  # noqa: E402
 
 from launcher import main  # noqa: E402
 from script_chainer.config.script_config import ScriptChainConfig  # noqa: E402
+from script_chainer.server import chain_decorators  # noqa: E402
+from script_chainer.server.chain_decorators import (  # noqa: E402
+    set_system_mute,
+    with_auto_shutdown,
+    with_system_mute,
+)
 from script_chainer.utils.runtime_group_utils import (  # noqa: E402
     build_runtime_selection,
     resolve_runtime_groups,
@@ -249,7 +255,6 @@ class TestLauncherArgParsing(unittest.TestCase):
         kwargs = rc.call_args.kwargs
         self.assertEqual(kwargs["chain_config_path"], "config/script_chain/01.yml")
         self.assertEqual(kwargs["debug_index"], 2)
-        self.assertEqual(kwargs["shutdown_delay"], 0)
         exit.assert_called_once_with(0)
 
     def test_main_defaults(self):
@@ -259,14 +264,14 @@ class TestLauncherArgParsing(unittest.TestCase):
         kwargs = rc.call_args.kwargs
         self.assertEqual(kwargs["chain_config_path"], "config/script_chain/88.yml")
         self.assertIsNone(kwargs["debug_index"])
-        self.assertEqual(kwargs["shutdown_delay"], 0)
 
     def test_shutdown_flag_const(self):
         with mock.patch("launcher.run_chain") as rc, mock.patch.object(sys, "exit"):
             sys.argv = ["launcher", "-s"]
             main()
+        # --shutdown 无值：const 默认 60，交由 with_auto_shutdown 注入，不进 run_chain kwargs。
         kwargs = rc.call_args.kwargs
-        self.assertEqual(kwargs["shutdown_delay"], 60)
+        self.assertIsNone(kwargs.get("shutdown_delay"))
         self.assertIsNone(kwargs["debug_index"])
 
     def test_shutdown_flag_with_value(self):
@@ -274,7 +279,7 @@ class TestLauncherArgParsing(unittest.TestCase):
             sys.argv = ["launcher", "--shutdown", "30"]
             main()
         kwargs = rc.call_args.kwargs
-        self.assertEqual(kwargs["shutdown_delay"], 30)
+        self.assertIsNone(kwargs.get("shutdown_delay"))
 
     def test_script_branch_runs_single_file(self):
         # --script 单文件模式：直接 exec .py，不经过脚本链编排，不调 run_chain。
@@ -303,7 +308,7 @@ class TestLauncherRunsThrough(unittest.TestCase):
         with mock.patch.object(
             script_runner._exit_controller, "wait", return_value=False
         ):
-            run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
+            run_chain(chain_config_path=cfg, debug_index=None)
         # 抵达此处即说明主流程（加载、编排、打印完成）跑通，未抛异常
 
     def test_disabled_script_is_skipped_without_launch(self):
@@ -318,7 +323,7 @@ class TestLauncherRunsThrough(unittest.TestCase):
         with mock.patch.object(
             script_runner._exit_controller, "wait", return_value=False
         ):
-            run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
+            run_chain(chain_config_path=cfg, debug_index=None)
         # 禁用脚本在编排解析阶段被跳过，不会真正启动任何进程
 
     def test_non_blocking_scripts_run_and_waited(self):
@@ -365,10 +370,133 @@ class TestLauncherRunsThrough(unittest.TestCase):
         with mock.patch.object(
             script_runner._exit_controller, "wait", return_value=False
         ):
-            run_chain(chain_config_path=cfg, shutdown_delay=0, debug_index=None)
+            run_chain(chain_config_path=cfg, debug_index=None)
         # 非阻塞脚本在整链末尾被等待完成，故二者标记文件均应存在
         self.assertTrue(marker_bg.exists(), "非阻塞后台脚本应已运行")
         self.assertTrue(marker_block.exists(), "阻塞脚本应已运行")
+
+
+class TestSetSystemMute(unittest.TestCase):
+    """set_system_mute：非 Windows / pycaw 缺失时安全降级（不影响链运行）。"""
+
+    def test_non_windows_returns_false(self):
+        with mock.patch.object(sys, "platform", "linux"):
+            self.assertFalse(set_system_mute(True))
+
+    def test_windows_without_pycaw_returns_false(self):
+        with (
+            mock.patch.object(sys, "platform", "win32"),
+            mock.patch.dict("sys.modules", {"pycaw": None, "pycaw.pycaw": None}),
+        ):
+            self.assertFalse(set_system_mute(True))
+
+
+class TestWithSystemMuteDecorator(unittest.TestCase):
+    """with_system_mute 装饰器：横切静音，与 run_chain 业务逻辑解耦。
+
+    静音执行下沉到 runner（覆盖异常/强制关闭窗口），不再依赖主仓守护线程。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.cfg = _write_chain(self.tmp, {"script_list": []})
+
+    def _run_with_mute(self, flag: bool, chain_side_effect=None):
+        """经装饰器包裹后调用 run_chain，返回 set_system_mute mock。"""
+        with (
+            mock.patch.object(
+                script_runner._exit_controller, "wait", return_value=False
+            ),
+            mock.patch.object(
+                chain_decorators, "set_system_mute", return_value=True
+            ) as mute_mock,
+        ):
+            # 复刻 launcher.main 的注入方式：flag 决定包不包装饰器。
+            decorated = with_system_mute(flag)(run_chain)
+            decorated(chain_config_path=self.cfg)
+        return mute_mock
+
+    def test_flag_true_calls_before_and_after(self):
+        """flag=True：进入前 SetMute(True)，结束后（finally）SetMute(False)。"""
+        mute_mock = self._run_with_mute(True)
+        mute_mock.assert_any_call(True)
+        mute_mock.assert_any_call(False)
+
+    def test_flag_false_returns_original_and_never_mutes(self):
+        """flag=False：装饰器直接返回原函数，不触碰静音 API（零开销）。"""
+        mute_mock = self._run_with_mute(False)
+        mute_mock.assert_not_called()
+
+    def test_flag_true_restores_on_exception(self):
+        """flag=True 链中抛异常：finally 仍恢复声音（不泄漏静音）。"""
+        with (
+            mock.patch.object(
+                script_runner._exit_controller, "wait", return_value=False
+            ),
+            mock.patch.object(
+                chain_decorators, "set_system_mute", return_value=True
+            ) as mute_mock,
+            # 链执行中途抛异常（静音之后），验证 finally 恢复。
+            mock.patch.object(
+                script_runner.ScriptChainConfig,
+                "compute_attach_targets",
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            decorated = with_system_mute(True)(run_chain)
+            with self.assertRaises(RuntimeError):
+                decorated(chain_config_path=self.cfg)
+        mute_mock.assert_any_call(True)
+        mute_mock.assert_any_call(False)
+
+
+class TestWithAutoShutdownDecorator(unittest.TestCase):
+    """with_auto_shutdown 装饰器：链正常跑完后触发关机确认，异常路径不关机。
+
+    真实关机动作委托 cmd_utils.shutdown_sys；本测试 mock 它验证触发时机。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.cfg = _write_chain(self.tmp, {"script_list": []})
+
+    def _run_with_shutdown(self, delay: int, attach_side_effect=None):
+        with (
+            mock.patch.object(
+                script_runner._exit_controller, "wait", return_value=False
+            ),
+            mock.patch.object(
+                chain_decorators, "shutdown_sys", return_value=None
+            ) as shutdown_mock,
+            mock.patch.object(
+                script_runner.ScriptChainConfig,
+                "compute_attach_targets",
+                side_effect=attach_side_effect,
+                return_value=set(),
+            ),
+        ):
+            decorated = with_auto_shutdown(delay)(run_chain)
+            if attach_side_effect is None:
+                decorated(chain_config_path=self.cfg)
+            else:
+                with self.assertRaises(attach_side_effect):
+                    decorated(chain_config_path=self.cfg)
+        return shutdown_mock
+
+    def test_delay_positive_triggers_shutdown(self):
+        """delay>0：链正常跑完后调用 shutdown_sys(delay)。"""
+        shutdown_mock = self._run_with_shutdown(45)
+        shutdown_mock.assert_called_once_with(45)
+
+    def test_delay_zero_never_shuts_down(self):
+        """delay<=0：装饰器返回原函数，不触碰关机 API（零开销）。"""
+        shutdown_mock = self._run_with_shutdown(0)
+        shutdown_mock.assert_not_called()
+
+    def test_exception_path_does_not_shutdown(self):
+        """delay>0 但链中抛异常：视为运行失败，不触发关机。"""
+        shutdown_mock = self._run_with_shutdown(45, attach_side_effect=RuntimeError)
+        shutdown_mock.assert_not_called()
 
 
 if __name__ == "__main__":
