@@ -18,7 +18,6 @@ import sys
 from colorama import init
 
 from script_chainer.server.chain_decorators import (
-    with_auto_shutdown,
     with_system_mute,
 )
 from script_chainer.win_exe.runner_logging import configure_runner_runtime_logging
@@ -37,15 +36,6 @@ def main() -> None:
         type=str,
         default="config/script_chain/88.yml",
         help="脚本链配置文件路径（.yml），相对路径以项目根为基准",
-    )
-    parser.add_argument(
-        "-s",
-        "--shutdown",
-        type=int,
-        nargs="?",
-        const=60,
-        default=0,
-        help="运行后关机延迟秒数，默认 0 表示不关机",
     )
     parser.add_argument(
         "--debug-index",
@@ -78,10 +68,7 @@ def main() -> None:
         _exec_python_file(args.script)
         sys.exit(0)
 
-    # 静音包在最外层，关机确认在内层（链正常跑完才触发）。
-    decorated_chain = with_system_mute(args.mute)(
-        with_auto_shutdown(args.shutdown or 0)(run_chain)
-    )
+    decorated_chain = with_system_mute(args.mute)(run_chain)
     decorated_chain(
         chain_config_path=args.chain,
         debug_index=args.debug_index,

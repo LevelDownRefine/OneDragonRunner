@@ -5,8 +5,6 @@ from __future__ import annotations
 import functools
 import sys
 
-from script_chainer.utils.cmd_utils import shutdown_sys
-
 
 def set_system_mute(mute_status: bool) -> bool:
     """设置系统扬声器静音状态（Windows 专属，按需 import pycaw）。
@@ -55,33 +53,6 @@ def with_system_mute(flag: bool):
                 return func(*args, **kwargs)
             finally:
                 set_system_mute(False)
-
-        return wrapper
-
-    return decorator
-
-
-def with_auto_shutdown(delay: int):
-    """参数化装饰器：被装饰函数正常返回后，按 delay 秒触发关机确认。
-
-    Args:
-        delay: 倒计时秒数，<=0 时返回原函数。
-
-    Returns:
-        装饰器；delay 非正时即原函数本身。
-
-    说明：链执行抛异常时不触发关机。
-    """
-
-    def decorator(func):
-        if delay <= 0:
-            return func
-
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            result = func(*args, **kwargs)
-            shutdown_sys(delay)
-            return result
 
         return wrapper
 

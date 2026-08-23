@@ -23,7 +23,6 @@ from script_chainer.config.script_config import ScriptChainConfig  # noqa: E402
 from script_chainer.server import chain_decorators  # noqa: E402
 from script_chainer.server.chain_decorators import (  # noqa: E402
     set_system_mute,
-    with_auto_shutdown,
     with_system_mute,
 )
 from script_chainer.utils.runtime_group_utils import (  # noqa: E402
@@ -265,22 +264,6 @@ class TestLauncherArgParsing(unittest.TestCase):
         self.assertEqual(kwargs["chain_config_path"], "config/script_chain/88.yml")
         self.assertIsNone(kwargs["debug_index"])
 
-    def test_shutdown_flag_const(self):
-        with mock.patch("launcher.run_chain") as rc, mock.patch.object(sys, "exit"):
-            sys.argv = ["launcher", "-s"]
-            main()
-        # --shutdown 无值：const 默认 60，交由 with_auto_shutdown 注入，不进 run_chain kwargs。
-        kwargs = rc.call_args.kwargs
-        self.assertIsNone(kwargs.get("shutdown_delay"))
-        self.assertIsNone(kwargs["debug_index"])
-
-    def test_shutdown_flag_with_value(self):
-        with mock.patch("launcher.run_chain") as rc, mock.patch.object(sys, "exit"):
-            sys.argv = ["launcher", "--shutdown", "30"]
-            main()
-        kwargs = rc.call_args.kwargs
-        self.assertIsNone(kwargs.get("shutdown_delay"))
-
     def test_script_branch_runs_single_file(self):
         # --script 单文件模式：直接 exec .py，不经过脚本链编排，不调 run_chain。
         # 注意：不能 mock sys.exit，否则 sys.exit(0) 变空操作、执行会穿透到末尾的
@@ -448,55 +431,6 @@ class TestWithSystemMuteDecorator(unittest.TestCase):
                 decorated(chain_config_path=self.cfg)
         mute_mock.assert_any_call(True)
         mute_mock.assert_any_call(False)
-
-
-class TestWithAutoShutdownDecorator(unittest.TestCase):
-    """with_auto_shutdown 装饰器：链正常跑完后触发关机确认，异常路径不关机。
-
-    真实关机动作委托 cmd_utils.shutdown_sys；本测试 mock 它验证触发时机。
-    """
-
-    def setUp(self):
-        self.tmp = tempfile.mkdtemp()
-        self.cfg = _write_chain(self.tmp, {"script_list": []})
-
-    def _run_with_shutdown(self, delay: int, attach_side_effect=None):
-        with (
-            mock.patch.object(
-                script_runner._exit_controller, "wait", return_value=False
-            ),
-            mock.patch.object(
-                chain_decorators, "shutdown_sys", return_value=None
-            ) as shutdown_mock,
-            mock.patch.object(
-                script_runner.ScriptChainConfig,
-                "compute_attach_targets",
-                side_effect=attach_side_effect,
-                return_value=set(),
-            ),
-        ):
-            decorated = with_auto_shutdown(delay)(run_chain)
-            if attach_side_effect is None:
-                decorated(chain_config_path=self.cfg)
-            else:
-                with self.assertRaises(attach_side_effect):
-                    decorated(chain_config_path=self.cfg)
-        return shutdown_mock
-
-    def test_delay_positive_triggers_shutdown(self):
-        """delay>0：链正常跑完后调用 shutdown_sys(delay)。"""
-        shutdown_mock = self._run_with_shutdown(45)
-        shutdown_mock.assert_called_once_with(45)
-
-    def test_delay_zero_never_shuts_down(self):
-        """delay<=0：装饰器返回原函数，不触碰关机 API（零开销）。"""
-        shutdown_mock = self._run_with_shutdown(0)
-        shutdown_mock.assert_not_called()
-
-    def test_exception_path_does_not_shutdown(self):
-        """delay>0 但链中抛异常：视为运行失败，不触发关机。"""
-        shutdown_mock = self._run_with_shutdown(45, attach_side_effect=RuntimeError)
-        shutdown_mock.assert_not_called()
 
 
 if __name__ == "__main__":
