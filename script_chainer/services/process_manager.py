@@ -239,7 +239,7 @@ class ProcessManager:
         args: list[str] | None = None,
         cwd: str | None = None,
         target_process: list[ProcessInfo] | None = None,
-        search_timeout: float = 60,
+        search_timeout: float = 300,
         stdout_callback: Callable[[str], None] | None = None,
     ) -> bool:
         """启动子进程。
@@ -311,7 +311,7 @@ class ProcessManager:
     def search_process(
         self,
         target: list[ProcessInfo],
-        timeout: float = 60,
+        timeout: float = 300,
         poll_interval: float = 0.5,
     ) -> bool:
         """搜索并追踪目标进程。
