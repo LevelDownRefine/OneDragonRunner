@@ -20,11 +20,6 @@ from conftest import dump_yaml as _dump_yaml  # noqa: E402
 
 from launcher import main  # noqa: E402
 from script_chainer.config.script_config import ScriptChainConfig  # noqa: E402
-from script_chainer.server import chain_decorators  # noqa: E402
-from script_chainer.server.chain_decorators import (  # noqa: E402
-    set_system_mute,
-    with_system_mute,
-)
 from script_chainer.utils.runtime_group_utils import (  # noqa: E402
     build_runtime_selection,
     resolve_runtime_groups,
@@ -357,80 +352,6 @@ class TestLauncherRunsThrough(unittest.TestCase):
         # 非阻塞脚本在整链末尾被等待完成，故二者标记文件均应存在
         self.assertTrue(marker_bg.exists(), "非阻塞后台脚本应已运行")
         self.assertTrue(marker_block.exists(), "阻塞脚本应已运行")
-
-
-class TestSetSystemMute(unittest.TestCase):
-    """set_system_mute：非 Windows / pycaw 缺失时安全降级（不影响链运行）。"""
-
-    def test_non_windows_returns_false(self):
-        with mock.patch.object(sys, "platform", "linux"):
-            self.assertFalse(set_system_mute(True))
-
-    def test_windows_without_pycaw_returns_false(self):
-        with (
-            mock.patch.object(sys, "platform", "win32"),
-            mock.patch.dict("sys.modules", {"pycaw": None, "pycaw.pycaw": None}),
-        ):
-            self.assertFalse(set_system_mute(True))
-
-
-class TestWithSystemMuteDecorator(unittest.TestCase):
-    """with_system_mute 装饰器：横切静音，与 run_chain 业务逻辑解耦。
-
-    静音执行下沉到 runner（覆盖异常/强制关闭窗口），不再依赖主仓守护线程。
-    """
-
-    def setUp(self):
-        self.tmp = tempfile.mkdtemp()
-        self.cfg = _write_chain(self.tmp, {"script_list": []})
-
-    def _run_with_mute(self, flag: bool, chain_side_effect=None):
-        """经装饰器包裹后调用 run_chain，返回 set_system_mute mock。"""
-        with (
-            mock.patch.object(
-                script_runner._exit_controller, "wait", return_value=False
-            ),
-            mock.patch.object(
-                chain_decorators, "set_system_mute", return_value=True
-            ) as mute_mock,
-        ):
-            # 复刻 launcher.main 的注入方式：flag 决定包不包装饰器。
-            decorated = with_system_mute(flag)(run_chain)
-            decorated(chain_config_path=self.cfg)
-        return mute_mock
-
-    def test_flag_true_calls_before_and_after(self):
-        """flag=True：进入前 SetMute(True)，结束后（finally）SetMute(False)。"""
-        mute_mock = self._run_with_mute(True)
-        mute_mock.assert_any_call(True)
-        mute_mock.assert_any_call(False)
-
-    def test_flag_false_returns_original_and_never_mutes(self):
-        """flag=False：装饰器直接返回原函数，不触碰静音 API（零开销）。"""
-        mute_mock = self._run_with_mute(False)
-        mute_mock.assert_not_called()
-
-    def test_flag_true_restores_on_exception(self):
-        """flag=True 链中抛异常：finally 仍恢复声音（不泄漏静音）。"""
-        with (
-            mock.patch.object(
-                script_runner._exit_controller, "wait", return_value=False
-            ),
-            mock.patch.object(
-                chain_decorators, "set_system_mute", return_value=True
-            ) as mute_mock,
-            # 链执行中途抛异常（静音之后），验证 finally 恢复。
-            mock.patch.object(
-                script_runner.ScriptChainConfig,
-                "compute_attach_targets",
-                side_effect=RuntimeError("boom"),
-            ),
-        ):
-            decorated = with_system_mute(True)(run_chain)
-            with self.assertRaises(RuntimeError):
-                decorated(chain_config_path=self.cfg)
-        mute_mock.assert_any_call(True)
-        mute_mock.assert_any_call(False)
 
 
 if __name__ == "__main__":

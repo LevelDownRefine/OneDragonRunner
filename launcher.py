@@ -17,9 +17,6 @@ import sys
 
 from colorama import init
 
-from script_chainer.server.chain_decorators import (
-    with_system_mute,
-)
 from script_chainer.win_exe.runner_logging import configure_runner_runtime_logging
 from script_chainer.win_exe.script_runner import (
     _cleanup_active_pm,
@@ -49,12 +46,6 @@ def main() -> None:
         default=None,
         help="直接执行单个 Python 脚本文件（.py），供 GUI「启动脚本」在冻结模式下调用",
     )
-    parser.add_argument(
-        "--mute",
-        action="store_true",
-        default=False,
-        help="运行中系统静音，链结束后自动恢复",
-    )
     args = parser.parse_args()
 
     if args.script:
@@ -68,8 +59,7 @@ def main() -> None:
         _exec_python_file(args.script)
         sys.exit(0)
 
-    decorated_chain = with_system_mute(args.mute)(run_chain)
-    decorated_chain(
+    run_chain(
         chain_config_path=args.chain,
         debug_index=args.debug_index,
     )
