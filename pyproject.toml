@@ -1,3 +1,27 @@
+[project]
+name = "script-chainer"
+version = "0.1.0"
+description = "OneDragon-Helper runner: 脚本链执行子项目（独立维护）"
+requires-python = ">=3.11"
+dependencies = [
+    "ruamel.yaml",
+    "colorama",
+    "psutil",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+# importlib 模式不修改 sys.path，避免 pytest 的 prepend 模式把 `src/`（runner 的父，
+# 无 __init__.py）插入 sys.path，从而导致测试内 `from launcher import main` 误命中
+# 主项目的 src/launcher.py（依赖 PySide6，runner 并不需要）。
+# pythonpath 仍显式声明 tests 目录，使 `from conftest import ...` 可解析。
+pythonpath = ["tests"]
+addopts = "--import-mode=importlib"
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
