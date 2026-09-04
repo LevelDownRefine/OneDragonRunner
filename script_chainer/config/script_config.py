@@ -165,6 +165,8 @@ class ScriptConfig:
     script_path: str = ""
     script_process_name: list[str] = field(default_factory=list)
     game_process_name: str = ""
+    # 游戏 exe 路径（由链配置提供）；非空表示运行本脚本前先启动游戏，留空表示不托管启动
+    game_path: str = ""
     launcher_mode: bool = False
     run_timeout_seconds: int = 3600
     check_done: str = ""
@@ -299,6 +301,8 @@ class ScriptConfig:
             return "启动后实际运行的程序为空"
         elif self.launcher_mode_invalid_message is not None:
             return self.launcher_mode_invalid_message
+        elif self.game_path and not Path(self.game_path).is_file():
+            return f"游戏路径不存在 {self.game_path}"
         elif self.run_timeout_seconds <= 0:
             return "运行超时时间必须大于0"
 

@@ -54,6 +54,8 @@ from script_chainer.win_exe.runner_logging import (
 _active_pm: ProcessManager | None = None
 # 所有非阻塞后台脚本的 ProcessManager，供退出时统一清理
 _non_block_pms: list[ProcessManager] = []
+# 启动游戏后等待就绪的秒数：固定等待（不轮询窗口），期间可被退出信号打断
+_GAME_LAUNCH_WAIT_SECONDS = 60
 
 
 class _NoLogTimeoutError(Exception):
@@ -356,6 +358,44 @@ def _wait_for_subprocess_ready(
     return False
 
 
+def _launch_game_if_needed(script_config: ScriptConfig) -> bool:
+    """按 game_path 启动游戏并等待就绪；未配置则不介入。
+
+    游戏进程不交 ProcessManager 长期持有：收尾由 ``_cleanup_processes`` 按
+    game_process_name 精确终止，此处只负责「拉起 + 等就绪」。
+    等就绪为固定等待（不轮询窗口），期间可被退出信号打断。
+    进程仍被纳入共享 Job Object（KILL_ON_JOB_CLOSE），runner 退出时随 Job
+    一并清理，故临时 ProcessManager 出作用域后不会残留孤儿进程。
+
+    Args:
+        script_config: 脚本配置。
+
+    Returns:
+        是否可继续运行脚本；启动失败或等待被用户中断时返回 False。
+    """
+    if not script_config.game_path:
+        return True
+
+    game_name = script_config.game_process_name
+    if game_name and is_process_existed(game_name):
+        print_message(f"游戏已在运行 跳过启动 {game_name}")
+        return True
+
+    print_message(f"启动游戏 {script_config.game_path}")
+    try:
+        ProcessManager().open_process(script_config.game_path)
+    except Exception:
+        log.error("启动游戏失败", exc_info=True)
+        print_message(f"启动游戏失败 {script_config.game_path}", level="ERROR")
+        return False
+
+    print_message(f"等待游戏就绪 {_GAME_LAUNCH_WAIT_SECONDS} 秒")
+    if _exit_controller.wait(_GAME_LAUNCH_WAIT_SECONDS):
+        print_message("等待游戏就绪被中断 跳过本脚本", level="ERROR")
+        return False
+    return True
+
+
 class _ScriptRun:
     """一次脚本运行的句柄，封装「启动 → 等待就绪 → 等待完成 → 清理」的完整生命周期。
 
@@ -405,8 +445,13 @@ class _ScriptRun:
         )
 
     def _prepare(self) -> bool:
-        """校验配置并启动子进程；self._pm 就绪（process 非空）时返回 True。"""
+        """校验配置、按需启动游戏、启动子进程；self._pm 就绪（process 非空）时返回 True。
+
+        启动游戏置于脚本子进程之前，且在阻塞 / 非阻塞分叉之前，两类脚本共用此路径。
+        """
         if not self._validate():
+            return False
+        if not _launch_game_if_needed(self._script_config):
             return False
         self._pm = self._launch()
         return self._pm.process is not None
