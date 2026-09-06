@@ -182,8 +182,8 @@ def _is_process_alive(pid: int) -> bool:
 def _make_mock_subprocess_ready():
     """构造 _wait_for_subprocess_ready 的 mock，设置 state.script_ever_existed 并返回 True。
 
-    用于绕过外部脚本崩溃时 _wait_for_subprocess_ready 的 20 秒硬编码超时
-    （进程退出码非 0 会导致其轮询死循环直到超时）。
+    崩溃用例里子进程秒退，mock 让用例不依赖真实的就绪轮询，保持快速与确定性；
+    该函数自身的失败分支由 TestWaitForSubprocessReady 覆盖。
     """
 
     def _mock(pm, script_path, state, **kwargs):
@@ -194,6 +194,23 @@ def _make_mock_subprocess_ready():
 
 
 # ─── 测试类 ────────────────────────────────────────────────────
+
+
+class TestWaitForSubprocessReady(unittest.TestCase):
+    """_wait_for_subprocess_ready：异常退出分支须立即判失败。"""
+
+    def test_nonzero_exit_returns_immediately(self):
+        """子进程退出码非 0：立即返回 False，不得轮询到 timeout。"""
+        pm = mock.MagicMock()
+        pm.target_process = None
+        pm.process.poll.return_value = 1
+        pm.is_running.return_value = False
+        state = script_runner._RunMonitorState()
+        start = time.monotonic()
+        ok = script_runner._wait_for_subprocess_ready(pm, "crash.exe", state)
+        elapsed = time.monotonic() - start
+        self.assertFalse(ok)
+        self.assertLess(elapsed, 5, "异常退出应立即返回，而非空转到超时")
 
 
 class TestBlockingChainResilience(unittest.TestCase):
@@ -329,8 +346,8 @@ class TestBlockingChainResilience(unittest.TestCase):
         """链: [外部脚本崩溃(sys.exit(1)), marker] → marker 应存在。
 
         统一方案：script_path=当前解释器，脚本经 script_arguments 传入。
-        需要 mock _wait_for_subprocess_ready 以绕过其 20 秒硬编码超时
-        （进程退出码非 0 时会进入死循环轮询直到超时）。
+        _wait_for_subprocess_ready 经 mock 跳过就绪轮询，保持快速与确定性
+        （其失败分支由 TestWaitForSubprocessReady 单独覆盖）。
         """
         marker = self.tmp_path / "ok.txt"
         crash_py = _write_exit_script(self.tmp_path, 1, "crash")

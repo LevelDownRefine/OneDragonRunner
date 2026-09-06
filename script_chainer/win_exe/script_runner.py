@@ -342,9 +342,12 @@ def _wait_for_subprocess_ready(
                         print_message(f"启动器已退出 (rc=0) {script_path}")
                         return True
                 else:
+                    # 已退出且非 0：进程不会再复活（is_running 为 False 说明
+                    # 被追踪的目标进程也已不在），立即判失败，不空转等超时。
                     print_message(
                         f"子进程异常退出 (rc={rc}) {script_path}", level="ERROR"
                     )
+                    return False
 
         if now - start_time > timeout:
             break
