@@ -65,7 +65,7 @@ _BASE_SCRIPT = {
 }
 
 
-def _write_chain_scripts(scripts: list[dict]) -> str:
+def _write_chain_scripts(case: unittest.TestCase, scripts: list[dict]) -> str:
     """写临时脚本链 yml（缺省字段用 _BASE_SCRIPT 填充），返回路径。"""
     normalized = []
     for i, s in enumerate(scripts):
@@ -74,7 +74,7 @@ def _write_chain_scripts(scripts: list[dict]) -> str:
         if "script_path" not in s:
             item["script_path"] = f"C:/fake/script_{i}.exe"
         normalized.append(item)
-    path = Path(tempfile.mkdtemp()) / "chain.yml"
+    path = Path(case.enterContext(tempfile.TemporaryDirectory())) / "chain.yml"
     path.write_text(
         _dump_yaml({"script_list": normalized}),
         encoding="utf-8",
@@ -96,6 +96,7 @@ class TestAttachTargets(unittest.TestCase):
 
     def test_pre_attaches_to_next_non_pre(self):
         path = _write_chain_scripts(
+            self,
             [
                 {"display_name": "gameA"},
                 {
@@ -104,7 +105,7 @@ class TestAttachTargets(unittest.TestCase):
                     "attach_direction": "pre",
                 },
                 {"display_name": "gameC"},
-            ]
+            ],
         )
         cfg = ScriptChainConfig(file_path=path)
         targets = cfg.compute_attach_targets()
@@ -113,6 +114,7 @@ class TestAttachTargets(unittest.TestCase):
 
     def test_post_attaches_to_prev_non_post(self):
         path = _write_chain_scripts(
+            self,
             [
                 {"display_name": "gameA"},
                 {
@@ -121,7 +123,7 @@ class TestAttachTargets(unittest.TestCase):
                     "attach_direction": "post",
                 },
                 {"display_name": "gameC"},
-            ]
+            ],
         )
         cfg = ScriptChainConfig(file_path=path)
         targets = cfg.compute_attach_targets()
@@ -130,10 +132,11 @@ class TestAttachTargets(unittest.TestCase):
 
     def test_no_attach_are_none(self):
         path = _write_chain_scripts(
+            self,
             [
                 {"display_name": "gameA"},
                 {"display_name": "gameB"},
-            ]
+            ],
         )
         cfg = ScriptChainConfig(file_path=path)
         self.assertEqual(cfg.compute_attach_targets(), [None, None])
@@ -143,7 +146,9 @@ class TestRuntimeSelection(unittest.TestCase):
     """build_runtime_selection 按 debug_index 裁剪参与脚本。"""
 
     def test_no_debug_index_selects_all(self):
-        path = _write_chain_scripts([{"display_name": "a"}, {"display_name": "b"}])
+        path = _write_chain_scripts(
+            self, [{"display_name": "a"}, {"display_name": "b"}]
+        )
         cfg = ScriptChainConfig(file_path=path)
         sel = build_runtime_selection(cfg.script_list, cfg.compute_attach_targets())
         self.assertEqual([s.display_name for s in sel.script_list], ["a", "b"])
@@ -151,6 +156,7 @@ class TestRuntimeSelection(unittest.TestCase):
 
     def test_debug_index_keeps_target_only(self):
         path = _write_chain_scripts(
+            self,
             [
                 {"display_name": "gameA"},
                 {
@@ -159,7 +165,7 @@ class TestRuntimeSelection(unittest.TestCase):
                     "attach_direction": "pre",
                 },
                 {"display_name": "gameC"},
-            ]
+            ],
         )
         cfg = ScriptChainConfig(file_path=path)
         targets = cfg.compute_attach_targets()
@@ -168,7 +174,7 @@ class TestRuntimeSelection(unittest.TestCase):
         self.assertEqual(sel.debug_target.display_name, "gameA")
 
     def test_debug_index_out_of_range_raises(self):
-        path = _write_chain_scripts([{"display_name": "gameA"}])
+        path = _write_chain_scripts(self, [{"display_name": "gameA"}])
         cfg = ScriptChainConfig(file_path=path)
         with self.assertRaises(ValueError):
             build_runtime_selection(
@@ -181,10 +187,11 @@ class TestResolveRuntimeGroups(unittest.TestCase):
 
     def test_disabled_script_skipped(self):
         path = _write_chain_scripts(
+            self,
             [
                 {"display_name": "gameA"},
                 {"display_name": "gameB", "enabled": False},
-            ]
+            ],
         )
         groups, skipped, _ = _resolve(path, None)
         self.assertEqual([g.host.display_name for g in groups], ["gameA"])
@@ -192,6 +199,7 @@ class TestResolveRuntimeGroups(unittest.TestCase):
 
     def test_attached_to_disabled_skipped(self):
         path = _write_chain_scripts(
+            self,
             [
                 {"display_name": "gameA"},
                 {
@@ -200,7 +208,7 @@ class TestResolveRuntimeGroups(unittest.TestCase):
                     "attach_direction": "pre",
                 },
                 {"display_name": "gameC", "enabled": False},
-            ]
+            ],
         )
         groups, skipped, _ = _resolve(path, None)
         self.assertEqual([g.host.display_name for g in groups], ["gameA"])
@@ -209,6 +217,7 @@ class TestResolveRuntimeGroups(unittest.TestCase):
     def test_consecutive_same_host_merged(self):
         # stubB 用 post 挂靠到前方的 gameA，二者应并入同一运行组。
         path = _write_chain_scripts(
+            self,
             [
                 {"display_name": "gameA"},
                 {
@@ -217,7 +226,7 @@ class TestResolveRuntimeGroups(unittest.TestCase):
                     "attach_direction": "post",
                 },
                 {"display_name": "gameC"},
-            ]
+            ],
         )
         cfg = ScriptChainConfig(file_path=path)
         targets = cfg.compute_attach_targets()
@@ -231,6 +240,9 @@ class TestResolveRuntimeGroups(unittest.TestCase):
 
 class TestLauncherArgParsing(unittest.TestCase):
     """launcher.main 解析命令行参数并正确调用 run_chain。"""
+
+    def setUp(self):
+        self.enterContext(mock.patch.object(sys, "argv", list(sys.argv)))
 
     def test_main_passes_chain_path_and_debug_index(self):
         with (
@@ -278,7 +290,7 @@ class TestLauncherRunsThrough(unittest.TestCase):
     """真实调用 run_chain，确保主流程（配置加载 + 编排解析）跑通且不启动进程。"""
 
     def setUp(self):
-        self.tmp = tempfile.mkdtemp()
+        self.tmp = self.enterContext(tempfile.TemporaryDirectory())
 
     def test_empty_script_list_completes(self):
         cfg = _write_chain(self.tmp, {"script_list": []})
@@ -294,15 +306,29 @@ class TestLauncherRunsThrough(unittest.TestCase):
             self.tmp,
             {
                 "script_list": [
-                    {"enabled": False, "display_name": "disabled-script"},
+                    {
+                        "enabled": False,
+                        "display_name": "disabled-script",
+                        "script_type": "external",
+                        "script_path": sys.executable,
+                        "check_done": "script_closed",
+                        "kill_game_after_done": False,
+                    },
                 ]
             },
         )
-        with mock.patch.object(
-            script_runner._exit_controller, "wait", return_value=False
+        parsed = ScriptChainConfig(file_path=cfg)
+        self.assertIsNone(parsed.script_list[0].invalid_message)
+        with (
+            mock.patch.object(
+                script_runner._exit_controller, "wait", return_value=False
+            ),
+            mock.patch.object(script_runner, "_run_script_in_group") as external,
+            mock.patch.object(script_runner, "_run_python_script") as python,
         ):
             run_chain(chain_config_path=cfg, debug_index=None)
-        # 禁用脚本在编排解析阶段被跳过，不会真正启动任何进程
+        external.assert_not_called()
+        python.assert_not_called()
 
     def test_non_blocking_scripts_run_and_waited(self):
         """整链模式下 block=False 的外部脚本后台启动，run_chain 末尾等待其完成。"""

@@ -52,7 +52,7 @@ def _write_chain(root: Path, script_path: str, name: str = "88") -> str:
 class TestScriptPathResolution(unittest.TestCase):
     def test_user_script_relative_resolves_against_chain_dir(self):
         """用户脚本（落点 config/script_chain/scripts/）按链目录解析（优先）。"""
-        root = Path(tempfile.mkdtemp())
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         # 用户脚本实际放在 <链目录>/scripts/ 下。
         user_dir = root / "config" / "script_chain" / "scripts"
         user_dir.mkdir(parents=True, exist_ok=True)
@@ -67,7 +67,7 @@ class TestScriptPathResolution(unittest.TestCase):
 
     def test_builtin_script_relative_falls_back_to_project_root(self):
         """内置脚本 scripts/shutdown.bat 不在链目录下时，回退到项目根解析。"""
-        root = Path(tempfile.mkdtemp())
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         # 内置脚本按部署结构放在 <root>/scripts/ 下，链目录下没有同名文件。
         (root / "scripts").mkdir(parents=True, exist_ok=True)
         (root / "scripts" / "shutdown.bat").write_text("@echo off\n", encoding="utf-8")
@@ -81,7 +81,7 @@ class TestScriptPathResolution(unittest.TestCase):
 
     def test_relative_path_never_resolves_under_script_chain_scripts_for_builtin(self):
         """回归：内置脚本不能被拼成 config/script_chain/scripts/shutdown.bat。"""
-        root = Path(tempfile.mkdtemp())
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         (root / "scripts").mkdir(parents=True, exist_ok=True)
         (root / "scripts" / "shutdown.bat").write_text("@echo off\n", encoding="utf-8")
 
@@ -94,7 +94,7 @@ class TestScriptPathResolution(unittest.TestCase):
         self.assertNotEqual(cfg.script_list[0].script_path, wrong)
 
     def test_absolute_script_path_is_kept_as_is(self):
-        root = Path(tempfile.mkdtemp())
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         (root / "scripts").mkdir(parents=True, exist_ok=True)
         abs_path = str((root / "scripts" / "shutdown.bat").resolve())
         (root / "scripts" / "shutdown.bat").write_text("@echo off\n", encoding="utf-8")
