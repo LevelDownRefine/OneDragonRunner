@@ -217,16 +217,14 @@ class TestBlockingChainResilience(unittest.TestCase):
     """全阻塞模式下脚本链的容错测试。"""
 
     def setUp(self):
-        self.tmp = tempfile.mkdtemp()
+        self.tmp = self.enterContext(tempfile.TemporaryDirectory())
         self.tmp_path = Path(self.tmp)
         # 统一 mock 掉所有 _exit_controller.wait，跳过组间 10 秒间隔和结尾 5 秒等待
         self._wait_patcher = mock.patch.object(
             script_runner._exit_controller, "wait", return_value=False
         )
         self._wait_patcher.start()
-
-    def tearDown(self):
-        self._wait_patcher.stop()
+        self.addCleanup(self._wait_patcher.stop)
 
     def _run_and_check(self, scripts: list[dict], expected_markers: list[Path]) -> None:
         """运行链配置并断言所有 marker 均存在。"""
