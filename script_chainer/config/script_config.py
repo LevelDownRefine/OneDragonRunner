@@ -6,7 +6,6 @@ from pathlib import Path, PureWindowsPath
 from script_chainer.config.config_item import ConfigItem, get_config_item_from_enum
 from script_chainer.config.yaml_config import YamlConfig
 from script_chainer.config.yaml_operator import YamlOperator
-from script_chainer.utils.game_command import parse_game_command
 from script_chainer.utils.process_name_utils import (
     normalize_process_name,
     normalize_process_names,
@@ -169,7 +168,6 @@ class ScriptConfig:
     # 游戏 exe 路径（由链配置提供）；非空表示运行本脚本前先启动游戏，留空表示不托管启动
     game_path: str = ""
     game_arguments: str = ""
-    game_command: str | None = None
     launcher_mode: bool = False
     run_timeout_seconds: int = 3600
     check_done: str = ""
@@ -213,13 +211,6 @@ class ScriptConfig:
         new = ScriptConfig(**self.to_dict())
         new.idx = self.idx
         return new
-
-    @property
-    def game_launch(self) -> tuple[str, str]:
-        """解析游戏命令；旧配置仅在新字段缺失时回退。"""
-        if self.game_command is not None:
-            return parse_game_command(self.game_command)
-        return self.game_path, self.game_arguments
 
     @property
     def script_display_name(self) -> str:
@@ -287,11 +278,6 @@ class ScriptConfig:
                 return f"Python 脚本不存在 {self.script_path}"
             return None
 
-        try:
-            game_path, _ = self.game_launch
-        except ValueError as exc:
-            return str(exc)
-
         if self.script_path is None or len(self.script_path) == 0:
             return "脚本路径为空"
         elif not Path(self.script_path).exists():
@@ -318,8 +304,8 @@ class ScriptConfig:
             return self.launcher_mode_invalid_message
         elif not isinstance(self.game_arguments, str) or "\0" in self.game_arguments:
             return "游戏启动参数无效"
-        elif game_path and not Path(game_path).is_file():
-            return f"游戏路径不存在 {game_path}"
+        elif self.game_path and not Path(self.game_path).is_file():
+            return f"游戏路径不存在 {self.game_path}"
         elif self.run_timeout_seconds <= 0:
             return "运行超时时间必须大于0"
 

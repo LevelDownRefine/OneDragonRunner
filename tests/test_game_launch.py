@@ -54,20 +54,6 @@ class TestGamePathValidation(unittest.TestCase):
             cfg.invalid_message, "游戏路径不存在 D:/not/exist/Endfield.exe"
         )
 
-    def test_command_validation_and_empty_command_override_legacy_path(self):
-        self.assertIsNone(
-            _config(game_command="", game_path="missing.exe").invalid_message
-        )
-        self.assertIsNone(
-            _config(
-                game_command=f'"{_EXISTING_FILE}" --profile "中文 空格"'
-            ).invalid_message
-        )
-        self.assertEqual(
-            _config(game_command='"unterminated').invalid_message,
-            "游戏启动命令格式无效，含空格的路径须用双引号",
-        )
-
     def test_invalid_game_arguments_are_rejected(self):
         for arguments in (None, 123, "--bad\0value"):
             with self.subTest(arguments=arguments):
@@ -129,7 +115,7 @@ class TestLaunchGameIfNeeded(unittest.TestCase):
 
     def test_game_arguments_reach_process_without_reparsing(self):
         arguments = '--profile "中文 空格" --literal "a&b"'
-        cfg = _config(game_command='"D:/Game Folder/game.exe" ' + arguments)
+        cfg = _config(game_path="D:/game.exe", game_arguments=arguments)
         with (
             mock.patch.object(script_runner, "print_message"),
             mock.patch.object(script_runner, "ProcessManager") as pm,
@@ -140,7 +126,7 @@ class TestLaunchGameIfNeeded(unittest.TestCase):
         ):
             self.assertTrue(script_runner._launch_game_if_needed(cfg))
         pm.return_value.open_process.assert_called_once_with(
-            "D:/Game Folder/game.exe", args=arguments
+            "D:/game.exe", args=arguments
         )
 
     def test_process_command_preserves_raw_windows_arguments(self):

@@ -362,7 +362,7 @@ def _wait_for_subprocess_ready(
 
 
 def _launch_game_if_needed(script_config: ScriptConfig) -> bool:
-    """按 game_command 启动游戏并等待就绪；未配置则不介入。
+    """按 game_path 启动游戏并等待就绪；未配置则不介入。
 
     游戏进程不交 ProcessManager 长期持有：收尾由 ``_cleanup_processes`` 按
     game_process_name 精确终止，此处只负责「拉起 + 等就绪」。
@@ -376,12 +376,7 @@ def _launch_game_if_needed(script_config: ScriptConfig) -> bool:
     Returns:
         是否可继续运行脚本；启动失败或等待被用户中断时返回 False。
     """
-    try:
-        game_path, arguments = script_config.game_launch
-    except ValueError as exc:
-        log.error("游戏启动命令无效: %s", exc)
-        return False
-    if not game_path:
+    if not script_config.game_path:
         return True
 
     game_name = script_config.game_process_name
@@ -389,12 +384,14 @@ def _launch_game_if_needed(script_config: ScriptConfig) -> bool:
         print_message(f"游戏已在运行 跳过启动 {game_name}")
         return True
 
-    print_message(f"启动游戏 {game_path}")
+    print_message(f"启动游戏 {script_config.game_path}")
     try:
-        ProcessManager().open_process(game_path, args=arguments)
+        ProcessManager().open_process(
+            script_config.game_path, args=script_config.game_arguments
+        )
     except Exception:
         log.error("启动游戏失败", exc_info=True)
-        print_message(f"启动游戏失败 {game_path}", level="ERROR")
+        print_message(f"启动游戏失败 {script_config.game_path}", level="ERROR")
         return False
 
     print_message(f"等待游戏就绪 {_GAME_LAUNCH_WAIT_SECONDS} 秒")
