@@ -386,7 +386,9 @@ def _launch_game_if_needed(script_config: ScriptConfig) -> bool:
 
     print_message(f"启动游戏 {script_config.game_path}")
     try:
-        ProcessManager().open_process(script_config.game_path)
+        ProcessManager().open_process(
+            script_config.game_path, args=script_config.game_arguments
+        )
     except Exception:
         log.error("启动游戏失败", exc_info=True)
         print_message(f"启动游戏失败 {script_config.game_path}", level="ERROR")

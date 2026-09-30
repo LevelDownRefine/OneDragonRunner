@@ -54,6 +54,14 @@ class TestGamePathValidation(unittest.TestCase):
             cfg.invalid_message, "游戏路径不存在 D:/not/exist/Endfield.exe"
         )
 
+    def test_invalid_game_arguments_are_rejected(self):
+        for arguments in (None, 123, "--bad\0value"):
+            with self.subTest(arguments=arguments):
+                self.assertEqual(
+                    _config(game_arguments=arguments).invalid_message,
+                    "游戏启动参数无效",
+                )
+
     def test_existing_game_path_is_valid(self):
         """配了 game_path 且文件存在 → 合法。"""
         self.assertIsNone(_config(game_path=_EXISTING_FILE).invalid_message)
@@ -102,8 +110,44 @@ class TestLaunchGameIfNeeded(unittest.TestCase):
             ) as wait,
         ):
             self.assertTrue(script_runner._launch_game_if_needed(cfg))
-        pm.return_value.open_process.assert_called_once_with("D:/Endfield.exe")
+        pm.return_value.open_process.assert_called_once_with("D:/Endfield.exe", args="")
         wait.assert_called_once_with(script_runner._GAME_LAUNCH_WAIT_SECONDS)
+
+    def test_game_arguments_reach_process_without_reparsing(self):
+        arguments = '--profile "中文 空格" --literal "a&b"'
+        cfg = _config(game_path="D:/game.exe", game_arguments=arguments)
+        with (
+            mock.patch.object(script_runner, "print_message"),
+            mock.patch.object(script_runner, "ProcessManager") as pm,
+            mock.patch.object(script_runner, "is_process_existed", return_value=False),
+            mock.patch.object(
+                script_runner._exit_controller, "wait", return_value=False
+            ),
+        ):
+            self.assertTrue(script_runner._launch_game_if_needed(cfg))
+        pm.return_value.open_process.assert_called_once_with(
+            "D:/game.exe", args=arguments
+        )
+
+    def test_process_command_preserves_raw_windows_arguments(self):
+        from script_chainer.services.process_manager import ProcessManager
+
+        manager = ProcessManager()
+        arguments = '--profile "中文 空格" --literal "a&b"'
+        with (
+            mock.patch.object(manager, "is_running", return_value=False),
+            mock.patch.object(manager, "clear"),
+            mock.patch.object(manager, "_get_job", return_value=None),
+            mock.patch(
+                "script_chainer.services.process_manager.subprocess.Popen"
+            ) as popen,
+        ):
+            self.assertTrue(
+                manager.open_process("C:/Game Folder/game.exe", args=arguments)
+            )
+        self.assertEqual(
+            popen.call_args.args[0], '"C:/Game Folder/game.exe" ' + arguments
+        )
 
     def test_launch_failure_blocks_script(self):
         """启动抛异常：不再运行本脚本。"""
