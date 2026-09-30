@@ -4,6 +4,7 @@ import argparse
 import atexit
 import datetime
 import os
+import shlex
 import signal
 import sys
 import threading
@@ -34,7 +35,6 @@ from script_chainer.services.process_manager import (
     find_process_by_infos,
     is_process_existed,
 )
-from script_chainer.utils.arguments import parse_arguments
 from script_chainer.utils.console_close_utils import force_exit_on_console_close
 from script_chainer.utils.process_name_utils import (
     normalize_process_names,
@@ -230,6 +230,13 @@ def _make_stdout_callback(
     return _on_stdout
 
 
+def _parse_arguments(arguments: str) -> list[str] | None:
+    """按现有脚本参数规则拆分游戏或脚本参数。"""
+    if arguments and arguments.strip():
+        return shlex.split(arguments, posix=False)
+    return None
+
+
 def _launch_script(
     script_config: ScriptConfig,
     target_process_infos: list[ProcessInfo] | None = None,
@@ -262,7 +269,7 @@ def _launch_script(
         )
         success = pm.open_process(
             program=script_path,
-            args=parse_arguments(script_config.script_arguments),
+            args=_parse_arguments(script_config.script_arguments),
             target_process=target_process_infos,
             stdout_callback=_make_stdout_callback(display_name, log_notifier, state),
         )
@@ -382,7 +389,7 @@ def _launch_game_if_needed(script_config: ScriptConfig) -> bool:
     print_message(f"启动游戏 {script_config.game_path}")
     try:
         ProcessManager().open_process(
-            script_config.game_path, args=parse_arguments(script_config.game_arguments)
+            script_config.game_path, args=_parse_arguments(script_config.game_arguments)
         )
     except Exception:
         log.error("启动游戏失败", exc_info=True)

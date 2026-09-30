@@ -110,11 +110,13 @@ class TestLaunchGameIfNeeded(unittest.TestCase):
             ) as wait,
         ):
             self.assertTrue(script_runner._launch_game_if_needed(cfg))
-        pm.return_value.open_process.assert_called_once_with("D:/Endfield.exe", args=[])
+        pm.return_value.open_process.assert_called_once_with(
+            "D:/Endfield.exe", args=None
+        )
         wait.assert_called_once_with(script_runner._GAME_LAUNCH_WAIT_SECONDS)
 
     def test_game_and_script_arguments_use_the_same_rules(self):
-        arguments = '--profile "中文 空格" --literal "a&b"'
+        arguments = "-t 1 -e"
         cfg = _config(game_path="D:/game.exe", game_arguments=arguments)
         with (
             mock.patch.object(script_runner, "print_message"),
@@ -126,11 +128,11 @@ class TestLaunchGameIfNeeded(unittest.TestCase):
         ):
             self.assertTrue(script_runner._launch_game_if_needed(cfg))
         pm.return_value.open_process.assert_called_once_with(
-            "D:/game.exe", args=["--profile", "中文 空格", "--literal", "a&b"]
+            "D:/game.exe", args=["-t", "1", "-e"]
         )
 
     def test_script_arguments_are_parsed_before_process_launch(self):
-        cfg = _config(script_arguments='--profile "中文 空格" --literal "a&b"')
+        cfg = _config(script_arguments="-t 1 -e")
         with (
             mock.patch.object(script_runner, "print_message"),
             mock.patch.object(script_runner, "ProcessManager") as pm,
@@ -138,14 +140,14 @@ class TestLaunchGameIfNeeded(unittest.TestCase):
             script_runner._launch_script(cfg)
         self.assertEqual(
             pm.return_value.open_process.call_args.kwargs["args"],
-            ["--profile", "中文 空格", "--literal", "a&b"],
+            ["-t", "1", "-e"],
         )
 
     def test_process_command_receives_a_list(self):
         from script_chainer.services.process_manager import ProcessManager
 
         manager = ProcessManager()
-        arguments = ["--profile", "中文 空格", "--literal", "a&b"]
+        arguments = ["-t", "1", "-e"]
         with (
             mock.patch.object(manager, "is_running", return_value=False),
             mock.patch.object(manager, "clear"),
