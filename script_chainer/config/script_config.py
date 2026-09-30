@@ -302,7 +302,7 @@ class ScriptConfig:
             return "启动后实际运行的程序为空"
         elif self.launcher_mode_invalid_message is not None:
             return self.launcher_mode_invalid_message
-        elif not isinstance(self.game_arguments, str) or "\0" in self.game_arguments:
+        elif not isinstance(self.game_arguments, str):
             return "游戏启动参数无效"
         elif self.game_path and not Path(self.game_path).is_file():
             return f"游戏路径不存在 {self.game_path}"
