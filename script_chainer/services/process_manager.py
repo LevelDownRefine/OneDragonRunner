@@ -246,7 +246,7 @@ class ProcessManager:
 
         Args:
             program: 可执行文件路径。
-            args: 启动参数列表。
+            args: 已解析的启动参数列表。
             cwd: 工作目录，默认为 program 所在目录。
             target_process: 目标进程信息列表（用于追踪 launcher 启动的子进程）。
             search_timeout: 搜索目标进程的超时时间（秒）。

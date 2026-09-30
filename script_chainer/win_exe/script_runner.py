@@ -230,6 +230,13 @@ def _make_stdout_callback(
     return _on_stdout
 
 
+def _parse_arguments(arguments: str) -> list[str] | None:
+    """按现有脚本参数规则拆分游戏或脚本参数。"""
+    if arguments and arguments.strip():
+        return shlex.split(arguments, posix=False)
+    return None
+
+
 def _launch_script(
     script_config: ScriptConfig,
     target_process_infos: list[ProcessInfo] | None = None,
@@ -253,11 +260,6 @@ def _launch_script(
     """
     script_path = script_config.script_path
 
-    # 解析启动参数
-    args_list = None
-    if script_config.script_arguments and script_config.script_arguments.strip():
-        args_list = shlex.split(script_config.script_arguments, posix=False)
-
     pm = ProcessManager()
     try:
         display_name = (
@@ -267,7 +269,7 @@ def _launch_script(
         )
         success = pm.open_process(
             program=script_path,
-            args=args_list,
+            args=_parse_arguments(script_config.script_arguments),
             target_process=target_process_infos,
             stdout_callback=_make_stdout_callback(display_name, log_notifier, state),
         )
@@ -386,7 +388,9 @@ def _launch_game_if_needed(script_config: ScriptConfig) -> bool:
 
     print_message(f"启动游戏 {script_config.game_path}")
     try:
-        ProcessManager().open_process(script_config.game_path)
+        ProcessManager().open_process(
+            script_config.game_path, args=_parse_arguments(script_config.game_arguments)
+        )
     except Exception:
         log.error("启动游戏失败", exc_info=True)
         print_message(f"启动游戏失败 {script_config.game_path}", level="ERROR")
