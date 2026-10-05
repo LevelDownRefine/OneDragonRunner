@@ -27,6 +27,7 @@ from script_chainer.config.script_config import (
     ScriptConfig,
     ScriptType,
 )
+from script_chainer.services.log_activity import LogFileActivity
 from script_chainer.services.process_manager import (
     LauncherExitError,
     ProcessInfo,
@@ -220,12 +221,12 @@ def _make_stdout_callback(
     prefix = f"{Style.DIM}[{display_name}]{Style.RESET_ALL}"
 
     def _on_stdout(line: str) -> None:
+        if state is not None:
+            state.last_log_time = time.monotonic()
         print(f"{prefix} {line}", flush=True)
         log.info("[脚本] %s", line)
         if log_notifier is not None:
             log_notifier.add(line)
-        if state is not None:
-            state.last_log_time = time.time()
 
     return _on_stdout
 
@@ -419,6 +420,7 @@ class _ScriptRun:
         self._script_config = script_config
         self._log_notifier = log_notifier
         self._state = state or _RunMonitorState()
+        self._log_activity: LogFileActivity | None = None
         self._pm: ProcessManager | None = None
         self._target_process_infos: list[ProcessInfo] | None = None
         self._non_block = False
@@ -460,6 +462,11 @@ class _ScriptRun:
             return False
         if not _launch_game_if_needed(self._script_config):
             return False
+        if not self._non_block and self._script_config.no_log_timeout_seconds > 0:
+            log_path = self._script_config.runtime_log_path
+            if log_path is not None:
+                self._log_activity = LogFileActivity(log_path)
+                print_message(f"无日志检测：同时监测日志文件 {log_path}")
         self._pm = self._launch()
         return self._pm.process is not None
 
@@ -489,7 +496,7 @@ class _ScriptRun:
 
             print_message(f"脚本子进程创建成功 {script_path}", level="PASS")
             if script_config.no_log_timeout_seconds > 0:
-                self._state.last_log_time = time.time()
+                self._state.last_log_time = time.monotonic()
 
             try:
                 self.wait_and_cleanup()
@@ -623,8 +630,10 @@ class _ScriptRun:
         if is_done:
             return True
 
-        # 静默超时检查（无日志输出超时，触发重启）
-        now = time.time()
+        # 控制台输出或文件变化任一有活动即刷新计时。
+        if self._log_activity is not None and self._log_activity.poll():
+            state.last_log_time = time.monotonic()
+        now = time.monotonic()
         no_log_timeout = script_config.no_log_timeout_seconds
         if (
             no_log_timeout > 0
@@ -632,7 +641,7 @@ class _ScriptRun:
             and now - state.last_log_time > no_log_timeout
         ):
             print_message(
-                f"脚本超过 {no_log_timeout} 秒无日志输出，判定为未响应 {script_config.script_display_name}",
+                f"脚本超过 {no_log_timeout} 秒无日志输出或文件更新，判定为未响应 {script_config.script_display_name}",
                 level="ERROR",
             )
             raise _NoLogTimeoutError()
