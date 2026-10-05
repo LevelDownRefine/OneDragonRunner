@@ -1,3 +1,4 @@
+import tempfile
 from contextlib import suppress
 from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
@@ -179,6 +180,7 @@ class ScriptConfig:
     notify_log_interval: int = 0
     enabled: bool = True
     attach_direction: str = AttachDirection.NONE
+    log_path: str = ""
     no_log_timeout_seconds: int = 0
     no_log_max_retries: int = 3
     block: bool = True
@@ -270,6 +272,24 @@ class ScriptConfig:
             return ""
 
     @property
+    def runtime_log_path(self) -> Path | None:
+        """解析实时日志位置，相对路径基于脚本目录，只允许文件名通配。"""
+        if not isinstance(self.log_path, str):
+            raise ValueError("log_path 必须为文本")
+        raw = self.log_path.strip().replace("\\", "/")
+        if not raw:
+            return None
+        if raw.startswith("%TEMP%/"):
+            path = Path(tempfile.gettempdir()) / raw[len("%TEMP%/") :]
+        elif Path(raw).is_absolute() or PureWindowsPath(raw).is_absolute():
+            path = Path(raw)
+        else:
+            path = Path(self.script_path.replace("\\", "/")).parent / raw
+        if any(char in str(path.parent) for char in "*?") or "**" in path.name:
+            raise ValueError("log_path 仅允许文件名含通配符")
+        return path
+
+    @property
     def invalid_message(self) -> str | None:
         if self.script_type == ScriptType.PYTHON:
             if not self.script_path:
@@ -308,6 +328,12 @@ class ScriptConfig:
             return f"游戏路径不存在 {self.game_path}"
         elif self.run_timeout_seconds <= 0:
             return "运行超时时间必须大于0"
+        if self.block and self.no_log_timeout_seconds > 0:
+            try:
+                self.runtime_log_path
+            except ValueError as error:
+                return str(error)
+        return None
 
 
 class ScriptChainConfig(YamlConfig):
