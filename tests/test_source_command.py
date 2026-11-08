@@ -44,7 +44,12 @@ class SourceCommandTests(unittest.TestCase):
             self.assertIsNotNone(parent)
             manager.kill()
             self.assertIsNotNone(parent.poll())
-            self.assertFalse(psutil.pid_exists(child_pid))
+            try:
+                child_status = psutil.Process(child_pid).status()
+            except psutil.NoSuchProcess:
+                child_status = None
+            # Unix 上孤儿进程可能等待 init 回收，但僵尸已不再执行。
+            self.assertIn(child_status, (None, psutil.STATUS_ZOMBIE))
 
     def test_real_process_receives_arguments_and_working_directory(self):
         with tempfile.TemporaryDirectory() as directory:
