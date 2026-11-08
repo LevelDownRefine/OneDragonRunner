@@ -164,6 +164,9 @@ class ScriptConfig:
     game_label: str = ""
     script_type: str = ScriptType.EXTERNAL
     script_path: str = ""
+    execution_program: str = ""
+    execution_args: list[str] = field(default_factory=list)
+    execution_cwd: str = ""
     script_process_name: list[str] = field(default_factory=list)
     game_process_name: str = ""
     # 游戏 exe 路径（由链配置提供）；非空表示运行本脚本前先启动游戏，留空表示不托管启动
@@ -291,6 +294,23 @@ class ScriptConfig:
 
     @property
     def invalid_message(self) -> str | None:
+        if not isinstance(self.execution_program, str) or not isinstance(
+            self.execution_cwd, str
+        ):
+            return "执行程序和工作目录必须为文本"
+        if not isinstance(self.execution_args, list) or not all(
+            isinstance(value, str) for value in self.execution_args
+        ):
+            return "执行参数必须为文本列表"
+        if not self.execution_program and (self.execution_args or self.execution_cwd):
+            return "执行程序为空"
+        if self.execution_program:
+            if self.script_type == ScriptType.PYTHON:
+                return "独立解释器须使用外部脚本类型"
+            if not Path(self.execution_program).is_file():
+                return f"执行程序不存在 {self.execution_program}"
+            if not self.execution_cwd or not Path(self.execution_cwd).is_dir():
+                return f"工作目录不存在 {self.execution_cwd}"
         if self.script_type == ScriptType.PYTHON:
             if not self.script_path:
                 return "Python 脚本路径为空"

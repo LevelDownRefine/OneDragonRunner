@@ -269,8 +269,11 @@ def _launch_script(
             or PurePath(script_path).name
         )
         success = pm.open_process(
-            program=script_path,
-            args=_parse_arguments(script_config.script_arguments),
+            program=script_config.execution_program or script_path,
+            args=script_config.execution_args
+            if script_config.execution_program
+            else _parse_arguments(script_config.script_arguments),
+            cwd=script_config.execution_cwd or None,
             target_process=target_process_infos,
             stdout_callback=_make_stdout_callback(display_name, log_notifier, state),
         )
